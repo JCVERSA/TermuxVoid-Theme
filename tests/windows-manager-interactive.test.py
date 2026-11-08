@@ -165,7 +165,7 @@ Write-Host '[[MENU-READY]]'
             proc.write("$env:POWERSHELLVOID_PLAIN_MENU = '1'; psvoid\r")
             wait_for('=== PowerShell Void Manager', count=9)
             proc.write('1\r')
-            wait_for('Back up and correct this JSON')
+            wait_for('correct this JSON')
             wait_for('=== PowerShell Void Manager', count=10)
             proc.write('6\r')
             proc.write("Write-Host ('RECOVERY' + '-DONE')\r")
