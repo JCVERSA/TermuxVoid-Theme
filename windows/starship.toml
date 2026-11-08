@@ -1,0 +1,47 @@
+# Windows Terminal + PowerShell prompt. Keep this separate from the Termux theme.
+add_newline = false
+format = """
+[╭─](white)\
+$username\
+$directory\
+$git_branch\
+$git_status\
+$time\
+$jobs\
+\n[╰─](white)$character"""
+
+[username]
+show_always = true
+style_user = 'bold green'
+style_root = 'bold red'
+format = '[\($user\)]($style)'
+
+[directory]
+style = 'bold #87FF00'
+format = '-\[[$path]($style)\]'
+truncation_length = 3
+truncation_symbol = '…/'
+
+[git_branch]
+symbol = '🌿 '
+style = 'bold purple'
+format = '-\[[$symbol$branch]($style)'
+
+[git_status]
+style = 'bold red'
+format = '([ $all_status$ahead_behind]($style))\]'
+
+[time]
+disabled = false
+time_format = '%H:%M:%S'
+style = 'bold cyan'
+format = ' [🕒 $time]($style)'
+
+[jobs]
+symbol = '⏳'
+style = 'bold yellow'
+format = ' [$symbol$number]($style)'
+
+[character]
+success_symbol = '[✅ ❯](bold green)'
+error_symbol = '[❌ ❯](bold red)'

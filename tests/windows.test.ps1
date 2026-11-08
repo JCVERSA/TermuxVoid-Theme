@@ -21,11 +21,11 @@ try {
     foreach ($encoding in @([System.Text.UTF8Encoding]::new($true), [System.Text.UnicodeEncoding]::new($false, $true))) {
         [System.IO.File]::WriteAllText($profilePath, ("# Existing profile {0}`r`n`$value = 42" -f [char]0x00e9), $encoding)
         [byte[]]$original = [System.IO.File]::ReadAllBytes($profilePath)
-        & $installer -Name 'Test User'
+        & $installer -SkipDependencyInstall
         Assert (Test-Path -LiteralPath (Join-Path $themeDir 'starship.toml')) 'config installed'
-        Assert ((Get-Content -LiteralPath (Join-Path $themeDir 'starship.toml') -Raw).Contains('[Test User]')) 'custom name inserted'
+        Assert ((Get-Content -LiteralPath (Join-Path $themeDir 'starship.toml') -Raw).Contains('$user')) 'username module configured'
         $failed = $false
-        try { & $installer } catch { $failed = $true }
+        try { & $installer -SkipDependencyInstall } catch { $failed = $true }
         Assert $failed 'second install must refuse to overwrite'
         # Add user content after installation; uninstall must preserve it and the original bytes.
         [byte[]]$suffix = $encoding.GetBytes("# Later user change`r`n")
@@ -42,20 +42,38 @@ try {
         Assert (-not (Test-Path -LiteralPath $themeDir)) 'unmodified managed files removed'
     }
 
-    # A fresh profile and an invalid label must not affect existing files unexpectedly.
+    # A fresh profile should be left empty when the managed block is removed.
     Remove-Item -LiteralPath $profilePath
-    $failed = $false
-    try { & $installer -Name 'Bad]Name' } catch { $failed = $true }
-    Assert $failed 'invalid name must be rejected'
-    Assert (-not (Test-Path -LiteralPath $themeDir)) 'invalid name must not create an installation'
-    & $installer
+    & $installer -SkipDependencyInstall
     Assert (Test-Path -LiteralPath $profilePath) 'missing profile created'
     & $installer -Uninstall
     Assert (([System.IO.File]::ReadAllBytes($profilePath)).Length -eq 0) 'new profile left empty after uninstall'
 
+    # Simulate the previous version's literal-name config and verify safe migration.
+    [System.IO.File]::WriteAllText($profilePath, '# Original', [System.Text.UTF8Encoding]::new($false))
+    & $installer -SkipDependencyInstall
+    $configPath = Join-Path $themeDir 'starship.toml'
+    $manifestPath = Join-Path $themeDir 'manifest.json'
+    [System.IO.File]::WriteAllText($configPath, 'legacy TermuxVoid config')
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    $manifest.hashes.'starship.toml' = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash
+    [System.IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json))
+    [byte[]]$beforeUpdate = [System.IO.File]::ReadAllBytes($profilePath)
+    & $installer -Update -SkipDependencyInstall
+    Assert (BytesEqual $beforeUpdate ([System.IO.File]::ReadAllBytes($profilePath))) 'update must not change profile'
+    Assert ((Get-Content -LiteralPath $configPath -Raw).Contains('$user')) 'update installs username prompt'
+    Add-Content -LiteralPath $configPath -Value '# Custom edit'
+    $failed = $false
+    try { & $installer -Update -SkipDependencyInstall } catch { $failed = $true }
+    Assert $failed 'update must not overwrite modified config'
+    Assert ((Get-Content -LiteralPath $configPath -Raw).Contains('# Custom edit')) 'modified config preserved'
+    & $installer -Uninstall
+    Assert (Test-Path -LiteralPath $configPath) 'uninstall retains modified config'
+    Remove-Item -LiteralPath $themeDir -Recurse -Force
+
     # Keep changes to the generated config and refuse to remove an edited managed block.
     [System.IO.File]::WriteAllText($profilePath, '# Original', [System.Text.UTF8Encoding]::new($false))
-    & $installer
+    & $installer -SkipDependencyInstall
     $PROFILE = [pscustomobject]@{ CurrentUserCurrentHost = (Join-Path $testRoot 'OtherHost\profile.ps1') }
     $failed = $false
     try { & $installer -Uninstall } catch { $failed = $true }
@@ -73,6 +91,31 @@ try {
     & $installer -Uninstall
     Assert (Test-Path -LiteralPath (Join-Path $themeDir 'starship.toml')) 'modified config retained on uninstall'
     Assert ((Get-ChildItem -LiteralPath (Join-Path $testRoot '.config\TermuxVoid-Windows\backups')).Count -ge 1) 'backups created'
+    Remove-Item -LiteralPath $themeDir -Recurse -Force
+
+    # Simulate WinGet without installing a real package or depending on machine PATH.
+    $oldPath = $env:PATH
+    $oldLog = $env:TERMUXVOID_TEST_LOG
+    try {
+        $bin = Join-Path $testRoot 'fake-bin'
+        New-Item -ItemType Directory -Path $bin -Force | Out-Null
+        $env:PATH = $bin
+        $env:TERMUXVOID_TEST_LOG = Join-Path $testRoot 'winget.log'
+        $fakeWinget = Join-Path $bin 'winget.cmd'
+        [System.IO.File]::WriteAllText($fakeWinget, "@echo off`r`necho %* > `"%TERMUXVOID_TEST_LOG%`"`r`nexit /b 12`r`n")
+        $failed = $false
+        try { & $installer } catch { $failed = $true }
+        Assert $failed 'failed dependency installation must stop setup'
+        Assert (-not (Test-Path -LiteralPath $themeDir)) 'dependency failure must not write theme files'
+        Assert ((Get-Content -LiteralPath $env:TERMUXVOID_TEST_LOG -Raw).Contains('Starship.Starship')) 'WinGet invoked for Starship'
+        [System.IO.File]::WriteAllText($fakeWinget, "@echo off`r`necho %* > `"%TERMUXVOID_TEST_LOG%`"`r`nexit /b 0`r`n")
+        & $installer
+        Assert (Test-Path -LiteralPath $configPath) 'theme installed after successful dependency command'
+        & $installer -Uninstall
+    } finally {
+        $env:PATH = $oldPath
+        $env:TERMUXVOID_TEST_LOG = $oldLog
+    }
     Write-Host 'PASS: Windows installer integration tests'
 } finally {
     $HOME = $originalHome

@@ -6,11 +6,17 @@ on:
 jobs:
   installer:
     runs-on: windows-latest
-    strategy:
-      matrix:
-        shell: [powershell, pwsh]
     steps:
       - uses: actions/checkout@v4
-      - name: Test installer
-        shell: ${{ matrix.shell }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test prompt configuration
+        shell: pwsh
+        run: python ./tests/windows-config.test.py
+      - name: Test Windows PowerShell 5.1
+        shell: powershell
+        run: ./tests/windows.test.ps1
+      - name: Test PowerShell 7
+        shell: pwsh
         run: ./tests/windows.test.ps1

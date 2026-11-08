@@ -6,11 +6,12 @@ Installs or removes the TermuxVoid prompt for the current Windows PowerShell hos
 [CmdletBinding()]
 param(
     [switch]$Uninstall,
-    [ValidatePattern('^[a-zA-Z0-9 _-]{1,40}$')]
-    [string]$Name = 'TermuxVoid'
+    [switch]$Update,
+    [switch]$SkipDependencyInstall
 )
 
 $ErrorActionPreference = 'Stop'
+if ($Uninstall -and $Update) { throw 'Choose either -Uninstall or -Update.' }
 if ($env:OS -ne 'Windows_NT') {
     throw 'This installer is for Windows. Run it in PowerShell on Windows.'
 }
@@ -136,32 +137,88 @@ if ($Uninstall) {
     return
 }
 
-if ($starts.Count -ne 0 -or $ends.Count -ne 0) {
-    throw 'TermuxVoid markers already exist in this profile. Uninstall or resolve them before installing.'
-}
-if (Test-Path -LiteralPath $themeDir) {
-    throw "Installation directory already exists: $themeDir. No files were overwritten."
-}
-$sourceConfig = Join-Path (Split-Path -Parent $PSScriptRoot) 'assets\starship.toml'
+$sourceConfig = Join-Path $PSScriptRoot 'starship.toml'
 if (-not (Test-Path -LiteralPath $sourceConfig -PathType Leaf)) {
-    throw 'The repository assets are missing. Run the installer from a complete checkout or extracted archive.'
-}
-$source = [System.IO.File]::ReadAllText($sourceConfig)
-if ($source.IndexOf('TermuxVoid', [StringComparison]::Ordinal) -lt 0 -or
-    $source.IndexOf('TermuxVoid', [StringComparison]::Ordinal) -ne $source.LastIndexOf('TermuxVoid', [StringComparison]::Ordinal)) {
-    throw 'The Starship template does not contain exactly one TermuxVoid name.'
+    throw 'The Windows Starship template is missing. Run the installer from a complete checkout or extracted archive.'
 }
 
-Write-Host "Installing for $($PSVersionTable.PSEdition) into $themeDir"
-Write-Host "Adding a managed block to $profilePath"
-if (-not (Get-Command starship -CommandType Application -ErrorAction SilentlyContinue)) {
-    Write-Warning 'Starship is not on PATH. Install it and restart PowerShell to activate the prompt.'
+if ($Update) {
+    if ($starts.Count -ne 1 -or $ends.Count -ne 1 -or $blocks.Count -ne 1) {
+        throw 'The original managed profile block is missing, edited, or duplicated. Resolve it before updating. No changes made.'
+    }
+    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+        throw 'No installation manifest found. Cannot safely update.'
+    }
+    try { $oldManifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json }
+    catch { throw "Cannot read $manifestPath. No changes made." }
+    if (-not $oldManifest.profilePath -or $oldManifest.profilePath -ne $profilePath -or -not $oldManifest.hashes) {
+        throw 'The installation belongs to another profile or has an invalid manifest. No changes made.'
+    }
+    foreach ($file in @('starship.toml', 'termuxvoid.ps1')) {
+        $path = Join-Path $themeDir $file
+        $expected = $oldManifest.hashes.$file
+        if (-not $expected -or -not (Test-Path -LiteralPath $path -PathType Leaf) -or (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $expected) {
+            throw "Installed file is missing or modified: $path. Back up your changes and resolve this before updating. No changes made."
+        }
+    }
+} else {
+    if ($starts.Count -ne 0 -or $ends.Count -ne 0) {
+        throw 'TermuxVoid markers already exist in this profile. Use -Update or resolve them before installing.'
+    }
+    if (Test-Path -LiteralPath $themeDir) {
+        throw "Installation directory already exists: $themeDir. No files were overwritten."
+    }
 }
+
+# Starship is the only mandatory external executable. The portable WinGet package
+# installs per-user; do not silently upgrade or install Git or other tools.
+if (-not (Get-Command starship -CommandType Application -ErrorAction SilentlyContinue)) {
+    if ($SkipDependencyInstall) {
+        Write-Warning 'Starship is not on PATH. The prompt will activate after Starship is installed and PowerShell is restarted.'
+    } else {
+        $winget = Get-Command winget -CommandType Application -ErrorAction SilentlyContinue
+        if (-not $winget) { throw 'Starship is missing and WinGet is unavailable. Install Starship or WinGet, then retry. No theme files changed.' }
+        Write-Host 'Installing Starship with WinGet (per-user portable package)...'
+        & $winget.Source install --id Starship.Starship --exact --source winget --scope user --installer-type portable --accept-package-agreements --accept-source-agreements --disable-interactivity
+        if ($LASTEXITCODE -ne 0) { throw "WinGet failed to install Starship (exit code $LASTEXITCODE). No theme files changed." }
+        if (-not (Get-Command starship -CommandType Application -ErrorAction SilentlyContinue)) {
+            Write-Warning 'Starship is not yet on this session PATH. Restart Windows Terminal after installation to refresh PATH.'
+        }
+    }
+}
+
+Write-Host "$(if ($Update) { 'Updating' } else { 'Installing' }) for $($PSVersionTable.PSEdition) into $themeDir"
+if ($Update) {
+    $backupDir = Join-Path $themeBase ('backups\update-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
+    foreach ($file in @('starship.toml', 'termuxvoid.ps1', 'manifest.json')) {
+        Copy-Item -LiteralPath (Join-Path $themeDir $file) -Destination (Join-Path $backupDir $file)
+    }
+    Write-Host "Previous installation backed up to $backupDir"
+    try {
+        Copy-Item -LiteralPath $sourceConfig -Destination $configPath -Force
+        Copy-Item -LiteralPath $PSCommandPath -Destination $installedScript -Force
+        $manifest = @{
+            profilePath = $profilePath
+            hashes = @{
+                'starship.toml' = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash
+                'termuxvoid.ps1' = (Get-FileHash -LiteralPath $installedScript -Algorithm SHA256).Hash
+            }
+        }
+        [System.IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json), [System.Text.UTF8Encoding]::new($false))
+    } catch {
+        Write-Warning "Update failed. Restore the three files from $backupDir before retrying."
+        throw
+    }
+    Write-Host 'Update complete. Restart Windows Terminal to refresh PATH and load the new prompt.'
+    return
+}
+Write-Host "Adding a managed block to $profilePath"
 Backup-Profile
 New-Item -ItemType Directory -Path (Split-Path -Parent $profilePath) -Force | Out-Null
 New-Item -ItemType Directory -Path $themeDir -Force | Out-Null
 try {
-    [System.IO.File]::WriteAllText($configPath, $source.Replace('TermuxVoid', $Name), [System.Text.UTF8Encoding]::new($false))
+    Copy-Item -LiteralPath $sourceConfig -Destination $configPath
     Copy-Item -LiteralPath $PSCommandPath -Destination $installedScript
     $manifest = @{
         profilePath = $profilePath
@@ -179,4 +236,4 @@ try {
     Write-Warning "Installation failed. Check the profile and backup before retrying; installation files may remain in $themeDir."
     throw
 }
-Write-Host 'Installation complete. Open a new PowerShell tab. See windows/README.md for colors, font, and uninstall.'
+Write-Host 'Installation complete. Restart Windows Terminal to refresh PATH and load the prompt. See windows/README.md for colors and uninstall.'

@@ -13,7 +13,7 @@ A professional terminal customization for Termux that transforms your mobile Lin
 ## ✨ Features
 
 - **One-click installation**
-- **Custom prompt with your name**
+- **Custom prompt** (the Windows version shows your current username)
 - **Banner customization** (use your own image!)
 - **Automatic shell configuration**
 - **Windows uninstall support** (see the Windows guide; Termux uninstall is not currently provided)
