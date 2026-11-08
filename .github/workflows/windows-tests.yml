@@ -56,6 +56,13 @@ jobs:
             Write-Output "::error::$($_.Exception.Message) at $($_.ScriptStackTrace)"
             exit 1
           }
+      - name: Test automatic portable Node setup
+        shell: pwsh
+        run: |
+          try { ./tests/windows-node-portable.test.ps1 } catch {
+            Write-Output "::error::$($_.Exception.Message) at $($_.ScriptStackTrace)"
+            exit 1
+          }
       - name: Test interactive idle behavior in a Windows pseudoconsole
         shell: pwsh
         run: |

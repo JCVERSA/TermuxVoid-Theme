@@ -107,6 +107,31 @@ Write-Host '[[READY]]'
             proc.close(force=True)
 
 
+def run_real_showcase(arguments):
+    proc = PtyProcess.spawn([sys.executable, str(ROOT / 'windows/animation-demo.py'), *arguments], dimensions=(30, 100))
+    output = []
+
+    def reader():
+        try:
+            while True:
+                output.append(proc.read(4096))
+        except (EOFError, OSError):
+            pass
+
+    threading.Thread(target=reader, daemon=True).start()
+    try:
+        deadline = time.monotonic() + 15
+        while proc.isalive() and time.monotonic() < deadline:
+            time.sleep(.1)
+        assert not proc.isalive(), f'showcase did not finish: {arguments!r}'
+        assert proc.exitstatus == 0, f'showcase failed: {arguments!r}: {"".join(output)[-6000:]}'
+        print(f'PASS: Asciimatics in Windows pseudoconsole: {arguments!r}')
+    finally:
+        proc.close(force=True)
+
+
 if __name__ == '__main__':
     for executable in ('powershell.exe', 'pwsh.exe'):
         run(executable)
+    run_real_showcase([])
+    run_real_showcase(['--idle', '0'])
