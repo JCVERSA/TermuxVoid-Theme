@@ -20,10 +20,10 @@ def session(shell, setup, first, legacy):
     env = os.environ.copy()
     if shell == 'powershell.exe':
         if legacy:
-            system_modules = Path(env['SystemRoot']) / 'System32/WindowsPowerShell/v1.0/Modules'
-            env['PSModulePath'] = env['PV_PS5_LEGACY_MODULE_DIR'] + ';' + str(system_modules)
+            system_modules = Path(env['SYSTEMROOT']) / 'System32/WindowsPowerShell/v1.0/Modules'
+            env['PSMODULEPATH'] = env['PV_PS5_LEGACY_MODULE_DIR'] + ';' + str(system_modules)
         else:
-            env['PSModulePath'] = env['PV_PS5_MODULE_DIR'] + ';' + env.get('PSModulePath', '')
+            env['PSMODULEPATH'] = env['PV_PS5_MODULE_DIR'] + ';' + env.get('PSMODULEPATH', '')
     proc = PtyProcess.spawn([shell, '-NoProfile', '-NoLogo', '-NoExit', '-File', str(setup)], env=env, dimensions=(30, 120))
     chunks = queue.Queue()
     output = []
