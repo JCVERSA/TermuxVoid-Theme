@@ -38,12 +38,28 @@ try {
     Assert ($editions.Count -eq 2) 'both installed editions found'
     Set-PVAnimationState $editions 'Idle' $false
     Set-PVAnimationState $editions 'IdleSeconds' 15
+    $otherManager = Join-Path (Join-Path $base $other) 'manager.ps1'
+    [byte[]]$managerBytes = [System.IO.File]::ReadAllBytes($otherManager)
+    Remove-Item -LiteralPath $otherManager
+    [byte[]]$currentSettings = [System.IO.File]::ReadAllBytes((Get-PVPaths $current).AnimationSettings)
+    $failed = $false
+    try { Set-PVAnimationState $editions 'Banner' $false } catch { $failed = $true }
+    Assert $failed 'incompatible other edition blocks cross-edition changes'
+    Assert ([Convert]::ToBase64String($currentSettings) -ceq [Convert]::ToBase64String([System.IO.File]::ReadAllBytes((Get-PVPaths $current).AnimationSettings))) 'incompatible target leaves current settings unchanged'
+    [System.IO.File]::WriteAllBytes($otherManager, $managerBytes)
     foreach ($edition in $editions) {
         $state = Get-PVAnimationState $edition
         Assert (-not $state.Idle -and $state.IdleSeconds -eq 15 -and $state.Welcome -and $state.Banner) 'animation changes preserve other settings in both editions'
     }
     Set-PVPromptState $editions 'Time' $false
     Set-PVPromptState $editions 'DirectoryColor' '#123ABC'
+    Set-PVPromptState $editions 'Git' $false
+    foreach ($edition in $editions) {
+        $source = [System.IO.File]::ReadAllText((Get-PVPaths $edition).Prompt)
+        $format = [regex]::Match($source, '(?s)format = """(.*?)"""').Groups[1].Value
+        Assert (-not $format.Contains('$git_branch') -and -not $format.Contains('$git_status')) 'git toggle removes both prompt tokens'
+    }
+    Set-PVPromptState $editions 'Git' $true
     foreach ($edition in $editions) {
         $testPaths = Get-PVPaths $edition
         $state = Get-PVPromptState $edition
@@ -92,6 +108,10 @@ try {
     Assert ($fragment.schemes[0].background -eq '#123456') 'palette survives guarded update'
     & $installer @paths -Uninstall
     Assert (Test-Path -LiteralPath $currentPrompt) 'user prompt retained after uninstall'
+    $savedFragments = @(Get-ChildItem -LiteralPath (Join-Path $base 'backups') -Recurse -Filter 'terminal-fragment.json')
+    Assert ($savedFragments.Count -ge 1) 'customized Terminal profile backed up on uninstall'
+    $savedFragment = Get-Content -LiteralPath $savedFragments[-1].FullName -Raw | ConvertFrom-Json
+    Assert ($savedFragment.schemes[0].background -eq '#123456') 'uninstall backup preserves custom terminal color'
     Write-Host 'PASS: manager settings, cross-edition safeguards, colors, and update'
 } finally {
     $env:STARSHIP_CONFIG = $oldConfig

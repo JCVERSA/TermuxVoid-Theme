@@ -180,6 +180,16 @@ if ($Uninstall) {
         ($starts.Count -ne 1 -or $ends.Count -ne 1 -or $blocks.Count -ne 1)) {
         throw 'The managed profile block has been edited or duplicated. Remove it manually, then rerun uninstall. No changes made.'
     }
+    # Preserve a manager-customized Terminal profile as user data before removal.
+    if ($manifest -and $manifest.terminalColors -and $manifest.terminalFragmentHash -and $fragmentPath -and
+        (Test-Path -LiteralPath $fragmentPath -PathType Leaf) -and
+        (Get-FileHash -LiteralPath $fragmentPath -Algorithm SHA256).Hash -eq $manifest.terminalFragmentHash) {
+        $colorBackup = Join-Path $themeBase ('backups\terminal-uninstall-' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $colorBackup -Force | Out-Null
+        Copy-Item -LiteralPath $fragmentPath -Destination (Join-Path $colorBackup 'terminal-fragment.json')
+        Copy-Item -LiteralPath $manifestPath -Destination (Join-Path $colorBackup 'manifest.json')
+        Write-Host "Customized Terminal profile backup: $colorBackup"
+    }
     $removals = @()
     if ($blocks.Count -eq 1) { $removals += @{ Offset = $blocks[0]; Length = $blockBytes.Length } }
     if ($animationBlocks.Count -eq 1) { $removals += @{ Offset = $animationBlocks[0]; Length = $animationBlockBytes.Length } }
