@@ -26,7 +26,7 @@ try {
     $env:TMP = $temp
     $profilePath = Join-Path $testRoot 'Profile With Spaces\Microsoft.PowerShell_profile.ps1'
     $themeDir = Join-Path $testRoot ('.config\TermuxVoid-Windows\' + $PSVersionTable.PSEdition)
-    $testArgs = @{ TestHome = $testRoot; TestProfile = $profilePath; SkipDependencyInstall = $true }
+    $testArgs = @{ TestHome = $testRoot; TestProfile = $profilePath; SkipDependencyInstall = $true; TerminalProfile = $true }
 
     $script:failDownload = $true
     $failed = $false
@@ -38,6 +38,8 @@ try {
     $script:failDownload = $false
     & ([scriptblock]::Create((irm 'mock-install'))) @testArgs
     Assert (Test-Path -LiteralPath (Join-Path $themeDir 'manifest.json')) 'short command installs theme'
+    $fragment = Join-Path $testRoot ('LocalAppData\Microsoft\Windows Terminal\Fragments\TermuxVoid-Theme\' + $PSVersionTable.PSEdition + '.json')
+    Assert (Test-Path -LiteralPath $fragment) 'short command installs optional Terminal profile'
     [byte[]]$originalProfile = [System.IO.File]::ReadAllBytes($profilePath)
     & ([scriptblock]::Create((irm 'mock-install'))) @testArgs
     Assert ([Convert]::ToBase64String($originalProfile) -ceq [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($profilePath))) 'second invocation updates without duplicating profile block'
