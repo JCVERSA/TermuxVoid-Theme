@@ -25,10 +25,12 @@ def run(shell):
         for edition in ('Core', 'Desktop'):
             theme = base / edition
             theme.mkdir(parents=True)
-            manager = (ROOT / 'windows/manager.ps1').read_bytes()
-            (theme / 'manager.ps1').write_bytes(manager)
-            digest = hashlib.sha256(manager).hexdigest().upper()
-            (theme / 'manifest.json').write_text(json.dumps({'profilePath': 'test-profile', 'hashes': {'manager.ps1': digest}}))
+            hashes = {}
+            for name in ('manager.ps1', 'starship.toml', 'termuxvoid-scheme.json'):
+                content = (ROOT / 'windows' / name).read_bytes()
+                (theme / name).write_bytes(content)
+                hashes[name] = hashlib.sha256(content).hexdigest().upper()
+            (theme / 'manifest.json').write_text(json.dumps({'profilePath': 'test-profile', 'hashes': hashes}))
         setup = folder / 'setup.ps1'
         setup.write_text(f"""
 $ErrorActionPreference = 'Stop'
@@ -90,18 +92,39 @@ Write-Host '[[MENU-READY]]'
             wait_for('Animation settings saved')
             proc.write('6\r')
             wait_for('=== PowerShell Void Manager', count=3)
+            proc.write('2\r')
+            wait_for('=== Prompt components ===', count=2)
+            proc.write('6\r')
+            wait_for('Prompt settings saved')
+            proc.write('11\r')
+            wait_for('=== PowerShell Void Manager', count=4)
+            proc.write('3\r')
+            wait_for('=== Windows Terminal colors ===')
+            proc.write('4\r')
+            wait_for('=== Choose color ===')
+            proc.write('1\r')
+            wait_for('background (#RRGGBB; Esc cancels):')
+            proc.write('#123456\r')
+            wait_for('Terminal colors saved')
+            proc.write('6\r')
+            wait_for('=== PowerShell Void Manager', count=5)
             proc.write('6\r')
             proc.write("Write-Host ('MENU' + '-DONE')\r")
             wait_for('MENU-DONE')
             # ConPTY encodes Ctrl+Alt+V as Alt + Ctrl-V.
             proc.write('\x1b\x16')
-            wait_for('=== PowerShell Void Manager', count=4)
+            wait_for('=== PowerShell Void Manager', count=6)
             proc.write('6\r')
             proc.write("Write-Host ('HOTKEY' + '-DONE')\r")
             wait_for('HOTKEY-DONE')
             setting = base / ('animation-settings-Desktop.json' if shell == 'powershell.exe' else 'animation-settings-Core.json')
             state = json.loads(setting.read_text())
             assert state['Welcome'] is False and state['Banner'] is True
+            edition = 'Desktop' if shell == 'powershell.exe' else 'Core'
+            prompt = json.loads((base / f'prompt-settings-{edition}.json').read_text())
+            fragment = json.loads((base / f'{edition}.json').read_text())
+            assert prompt['Time'] is False
+            assert fragment['schemes'][0]['background'] == '#123456'
             proc.write('exit\r')
             print(f'PASS: {shell} interactive arrow and numbered manager')
         finally:
