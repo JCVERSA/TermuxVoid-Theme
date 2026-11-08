@@ -49,6 +49,8 @@ try {
     Assert ((Get-Content -LiteralPath $config -Raw).Contains('# local edit')) 'update preserves user edits'
     Assert ((Get-ChildItem -LiteralPath $temp -Force | Measure-Object).Count -eq 0) 'temporary download files removed after update'
     Write-Host 'PASS: Windows short-command bootstrap'
+    # The deliberately failed child process above must not fail the test runner.
+    $global:LASTEXITCODE = 0
 } finally {
     $env:TEMP = $oldTemp
     $env:TMP = $oldTmp
