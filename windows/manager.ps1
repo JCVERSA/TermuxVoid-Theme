@@ -86,11 +86,11 @@ function global:Set-PVPromptState([string[]]$Editions, [string]$Key, $Value) {
         }
         foreach ($keyName in $groups.Keys) {
             foreach ($token in $groups[$keyName]) {
-                if (-not $format.Contains($token)) { throw "Unrecognized prompt template for $edition: $token missing." }
+                if (-not $format.Contains($token)) { throw "Unrecognized prompt template for ${edition}: $token missing." }
                 if (-not $state[$keyName]) { $format = [regex]::Replace($format, '(?m)^' + [regex]::Escape($token) + '\\\r?\n', '') }
             }
         }
-        if (-not $format.Contains('$character')) { throw "Unrecognized prompt template for $edition: character missing." }
+        if (-not $format.Contains('$character')) { throw "Unrecognized prompt template for ${edition}: character missing." }
         if (-not $state.Status) { $format = $format.Replace('$character', '>') }
         $toml = $toml.Substring(0, $start) + $format + $toml.Substring($end + 3)
         $toml = $toml.Replace('bold #87FF00', ('bold ' + $state.DirectoryColor.ToUpperInvariant()))
