@@ -2,7 +2,7 @@
 add_newline = false
 format = """
 [╭─](white)\
-$username\
+${env_var.USERNAME}\
 $directory\
 $git_branch\
 $git_status\
@@ -10,11 +10,11 @@ $time\
 $jobs\
 \n[╰─](white)$character"""
 
-[username]
-show_always = true
-style_user = 'bold green'
-style_root = 'bold red'
-format = '[\($user\)]($style)'
+# Starship's username module substitutes 'Administrator' in elevated Windows
+# sessions. USERNAME keeps the actual account name visible in those sessions.
+[env_var.USERNAME]
+default = 'unknown'
+format = '[\($env_value\)](bold green)'
 
 [directory]
 style = 'bold #87FF00'

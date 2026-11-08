@@ -6,10 +6,10 @@ import tomllib
 ROOT = Path(__file__).resolve().parent.parent
 config = tomllib.loads((ROOT / 'windows/starship.toml').read_text(encoding='utf-8'))
 assert all(f'${module}' in config['format'] for module in (
-    'username', 'directory', 'git_branch', 'git_status', 'time', 'jobs', 'character'
+    'directory', 'git_branch', 'git_status', 'time', 'jobs', 'character'
 ))
-assert '$user' in config['username']['format']
-assert config['username']['show_always']
+assert '${env_var.USERNAME}' in config['format']
+assert '$env_value' in config['env_var']['USERNAME']['format']
 assert config['time']['disabled'] is False
 assert config['character']['success_symbol'] != config['character']['error_symbol']
 assert config['jobs']['symbol']

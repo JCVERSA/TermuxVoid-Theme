@@ -20,7 +20,7 @@ try {
         [byte[]]$original = [System.IO.File]::ReadAllBytes($profilePath)
         & $installer @testPaths -SkipDependencyInstall
         Assert (Test-Path -LiteralPath (Join-Path $themeDir 'starship.toml')) 'config installed'
-        Assert ((Get-Content -LiteralPath (Join-Path $themeDir 'starship.toml') -Raw).Contains('$user')) 'username module configured'
+        Assert ((Get-Content -LiteralPath (Join-Path $themeDir 'starship.toml') -Raw).Contains('${env_var.USERNAME}')) 'username module configured'
         $failed = $false
         try { & $installer @testPaths -SkipDependencyInstall } catch { $failed = $true }
         Assert $failed 'second install must refuse to overwrite'
@@ -58,7 +58,7 @@ try {
     [byte[]]$beforeUpdate = [System.IO.File]::ReadAllBytes($profilePath)
     & $installer @testPaths -Update -SkipDependencyInstall
     Assert (BytesEqual $beforeUpdate ([System.IO.File]::ReadAllBytes($profilePath))) 'update must not change profile'
-    Assert ((Get-Content -LiteralPath $configPath -Raw).Contains('$user')) 'update installs username prompt'
+    Assert ((Get-Content -LiteralPath $configPath -Raw).Contains('${env_var.USERNAME}')) 'update installs username prompt'
     Add-Content -LiteralPath $configPath -Value '# Custom edit'
     $failed = $false
     try { & $installer @testPaths -Update -SkipDependencyInstall } catch { $failed = $true }

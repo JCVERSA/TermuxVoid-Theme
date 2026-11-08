@@ -16,7 +16,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Starship failed to render success prompt' }
         $failure = & $Starship prompt '--status=1' '--jobs=1' '--terminal-width=120' | Out-String
         if ($LASTEXITCODE -ne 0) { throw 'Starship failed to render failure prompt' }
-        if (-not $success.Contains([Environment]::UserName)) { throw "Username missing from prompt; expected $([Environment]::UserName); got: $($success -replace '[\x1b\r\n]', ' ')" }
+        if (-not $success.Contains($env:USERNAME)) { throw "Username missing from prompt; expected $env:USERNAME; got: $($success -replace '[\x1b\r\n]', ' ')" }
         if (-not $success.Contains('termuxvoid-test')) { throw 'Git branch missing from prompt' }
         if ($success -notmatch '\d{2}:\d{2}:\d{2}') { throw 'Time missing from prompt' }
         if (-not $success.Contains([char]0x2705)) { throw 'Success icon missing' }
