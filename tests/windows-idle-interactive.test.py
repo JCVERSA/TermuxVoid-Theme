@@ -6,6 +6,7 @@ without depending on physical keyboard events in GitHub's headless session.
 import os
 from pathlib import Path
 import queue
+import subprocess
 import sys
 import tempfile
 import threading
@@ -130,8 +131,68 @@ def run_real_showcase(arguments):
         proc.close(force=True)
 
 
+def run_startup_effects():
+    with tempfile.TemporaryDirectory(prefix='powershell-void-effects-') as tmp:
+        folder = Path(tmp)
+        subprocess.run(['cmd.exe', '/c', 'npm.cmd', 'install', '--prefix', str(folder / 'node'),
+                        '--no-audit', '--no-fund', '--ignore-scripts', 'ascii.rest@0.4.0'], check=True)
+        cli = folder / 'node/node_modules/ascii.rest/dist/cli.js'
+        setup = folder / 'effects.ps1'
+        setup.write_text(f"""
+$ErrorActionPreference = 'Stop'
+$env:TERMUXVOID_NO_ANIMATION = '1'
+. {quote(ROOT / 'windows/animation.ps1')}
+function global:Get-TermuxVoidAnimationPaths {{ return @{{
+    Python = {quote(sys.executable)}
+    Node = {quote(cli)}
+    NodeRuntime = ''
+    Demo = {quote(ROOT / 'windows/animation-demo.py')}
+    Base = {quote(folder)}
+    Settings = {quote(folder / 'settings.json')}
+    Setup = ''
+}} }}
+$env:TERMUXVOID_NO_ANIMATION = $null
+Write-Host '[[EFFECT-READY]]'
+""", encoding='utf-8')
+        proc = PtyProcess.spawn(['pwsh.exe', '-NoProfile', '-NoLogo', '-NoExit', '-File', str(setup)], dimensions=(30, 120))
+        chunks = queue.Queue()
+        output = []
+
+        def reader():
+            try:
+                while True:
+                    chunks.put(proc.read(4096))
+            except (EOFError, OSError):
+                pass
+        threading.Thread(target=reader, daemon=True).start()
+
+        def wait_for(text, timeout=30):
+            end = time.monotonic() + timeout
+            while time.monotonic() < end:
+                try:
+                    output.append(chunks.get(timeout=.2))
+                except queue.Empty:
+                    pass
+                if text in ''.join(output):
+                    return
+            raise AssertionError(f'missing {text!r}: {"".join(output)[-5000:]}')
+
+        try:
+            wait_for('[[EFFECT-READY]]')
+            proc.write("Show-PowerShellVoidAnimation -Engine TTE; Write-Host ('FINISHED' + '-TTE')\r")
+            wait_for('FINISHED-TTE')
+            proc.write("Show-PowerShellVoidAnimation -Engine AsciiRest; Write-Host ('FINISHED' + '-BANNER')\r")
+            wait_for('FINISHED-BANNER')
+            text = ''.join(output)
+            assert 'exited with code' not in text and 'unavailable' not in text and 'Traceback' not in text, text[-5000:]
+            print('PASS: TTE and ascii.rest PowerShell helpers in Windows pseudoconsole')
+        finally:
+            proc.close(force=True)
+
+
 if __name__ == '__main__':
     for executable in ('powershell.exe', 'pwsh.exe'):
         run(executable)
     run_real_showcase([])
     run_real_showcase(['--idle', '0'])
+    run_startup_effects()
