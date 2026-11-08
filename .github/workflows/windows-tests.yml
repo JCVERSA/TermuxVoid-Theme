@@ -42,6 +42,11 @@ jobs:
             Write-Output "::error::$($_.Exception.Message) at $($_.ScriptStackTrace)"
             exit 1
           }
+      - name: Test installer without Get-FileHash
+        shell: pwsh
+        run: |
+          powershell.exe -NoProfile -File ./tests/windows-hash-isolation.test.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Test manager on Windows PowerShell 5.1
         shell: powershell
         run: |

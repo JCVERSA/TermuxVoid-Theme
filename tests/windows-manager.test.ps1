@@ -24,6 +24,9 @@ try {
     $env:TERMUXVOID_NO_ANIMATION = '1'
     . (Join-Path $root 'windows\animation.ps1')
     . (Join-Path $root 'windows\manager.ps1')
+    $hashFixture = Join-Path $testRoot 'hash-fixture.txt'
+    [System.IO.File]::WriteAllText($hashFixture, 'abc', [System.Text.UTF8Encoding]::new($false))
+    Assert ((Get-PVFileHash $hashFixture) -eq 'BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD') 'manager SHA-256 matches known vector'
     function global:Get-PVPaths([string]$Edition) {
         $theme = Join-Path $base $Edition
         return @{

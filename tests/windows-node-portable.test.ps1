@@ -4,6 +4,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('PowerShellVoid-node-test-' + [guid]::NewGuid().ToString('N'))
 $oldPath = $env:PATH
+function global:Get-FileHash { throw 'Setup must not depend on Get-FileHash.' }
 try {
     $env:PATH = Join-Path $env:SystemRoot 'System32'
     & (Join-Path $root 'windows\animation-setup.ps1') -Base $testRoot -Engine AsciiRest
@@ -15,5 +16,6 @@ try {
     Write-Host 'PASS: portable Node download, checksum and package setup'
 } finally {
     $env:PATH = $oldPath
+    Remove-Item -Path Function:\global:Get-FileHash -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $testRoot) { Remove-Item -LiteralPath $testRoot -Recurse -Force }
 }
