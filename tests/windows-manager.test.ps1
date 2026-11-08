@@ -16,6 +16,11 @@ try {
     $current = $PSVersionTable.PSEdition
     $other = if ($current -eq 'Core') { 'Desktop' } else { 'Core' }
     Copy-Item -LiteralPath (Join-Path $base $current) -Destination (Join-Path $base $other) -Recurse
+    # The simulated other edition has not opted into a Terminal fragment yet.
+    $otherManifestPath = Join-Path (Join-Path $base $other) 'manifest.json'
+    $otherManifest = Get-Content -LiteralPath $otherManifestPath -Raw | ConvertFrom-Json
+    $otherManifest.PSObject.Properties.Remove('terminalFragmentHash')
+    [System.IO.File]::WriteAllText($otherManifestPath, ($otherManifest | ConvertTo-Json -Depth 8))
     $env:TERMUXVOID_NO_ANIMATION = '1'
     . (Join-Path $root 'windows\animation.ps1')
     . (Join-Path $root 'windows\manager.ps1')
