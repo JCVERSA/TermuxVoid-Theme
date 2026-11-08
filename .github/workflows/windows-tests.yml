@@ -93,6 +93,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python ./tests/windows-idle-interactive.test.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python ./tests/windows-manager-interactive.test.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Test real Starship rendering
         shell: pwsh
         run: |
