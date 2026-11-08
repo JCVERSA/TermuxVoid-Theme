@@ -16,10 +16,14 @@ def quote(value):
     return "'" + str(value).replace("'", "''") + "'"
 
 
-def session(shell, setup, first):
+def session(shell, setup, first, legacy):
     env = os.environ.copy()
     if shell == 'powershell.exe':
-        env['PSModulePath'] = env['PV_PS5_MODULE_DIR'] + ';' + env.get('PSModulePath', '')
+        if legacy:
+            system_modules = Path(env['SystemRoot']) / 'System32/WindowsPowerShell/v1.0/Modules'
+            env['PSModulePath'] = env['PV_PS5_LEGACY_MODULE_DIR'] + ';' + str(system_modules)
+        else:
+            env['PSModulePath'] = env['PV_PS5_MODULE_DIR'] + ';' + env.get('PSModulePath', '')
     proc = PtyProcess.spawn([shell, '-NoProfile', '-NoLogo', '-NoExit', '-File', str(setup)], env=env, dimensions=(30, 120))
     chunks = queue.Queue()
     output = []
@@ -62,7 +66,7 @@ def session(shell, setup, first):
         proc.close(force=True)
 
 
-def run(shell):
+def run(shell, legacy=False):
     with tempfile.TemporaryDirectory(prefix='powershell-void-predict-') as tmp:
         folder = Path(tmp)
         setup = folder / 'setup.ps1'
@@ -73,11 +77,13 @@ $env:WT_SESSION = 'test'
 $env:TERMUXVOID_NO_ANIMATION = '1'
 if (-not (Get-Module PSReadLine)) {{ Import-Module PSReadLine -MinimumVersion 2.1.0 -ErrorAction Stop }}
 if ((Get-Module PSReadLine).Version -lt [version]'2.1.0') {{ throw 'Predictive PSReadLine was not loaded at startup.' }}
+if ({'$true' if legacy else '$false'} -and (Get-Module PSReadLine).Version -ne [version]'2.1.0') {{ throw 'Legacy test did not load PSReadLine 2.1.0.' }}
 Set-PSReadLineOption -HistorySavePath {quote(history)} -HistorySaveStyle SaveIncrementally -PredictionSource None
 $binding = (Get-PSReadLineKeyHandler -Chord 'RightArrow').Function
 . {quote(ROOT / 'windows/manager.ps1')}
 $opts = Get-PSReadLineOption
-if ([string]$opts.PredictionSource -ne 'History' -or [string]$opts.PredictionViewStyle -ne 'InlineView') {{ throw 'History inline predictions were not enabled.' }}
+if ([string]$opts.PredictionSource -ne 'History') {{ throw 'History predictions were not enabled.' }}
+if ((Get-Command Set-PSReadLineOption).Parameters.ContainsKey('PredictionViewStyle') -and [string]$opts.PredictionViewStyle -ne 'InlineView') {{ throw 'Inline view was not selected.' }}
 if ((Get-PSReadLineKeyHandler -Chord 'RightArrow').Function -ne $binding) {{ throw 'Right Arrow binding was replaced.' }}
 Apply-PVSuggestions $false
 if ([string](Get-PSReadLineOption).PredictionSource -ne 'None') {{ throw 'History predictions were not disabled.' }}
@@ -92,16 +98,17 @@ if ($PSVersionTable.PSEdition -eq 'Core' -and $PSVersionTable.PSVersion -ge [ver
 function global:Get-VoidSuggestProof {{ Write-Host '[[HISTORY-EXECUTED]]' }}
 Write-Host '[[PREDICTION-READY]]'
 """, encoding='utf-8')
-        session(shell, setup, True)
+        session(shell, setup, True, legacy)
         assert history.exists() and 'Get-VoidSuggestProof' in history.read_text(encoding='utf-8-sig')
-        session(shell, setup, False)
-        print(f'PASS: {shell} inline history suggestion, accept and persistence')
+        session(shell, setup, False, legacy)
+        print(f'PASS: {shell} {"PSReadLine 2.1" if legacy else "current PSReadLine"} inline history suggestion, accept and persistence')
 
 
 if __name__ == '__main__':
     try:
         for shell in ('powershell.exe', 'pwsh.exe'):
             run(shell)
+        run('powershell.exe', legacy=True)
     except Exception as exc:
         print('::error::' + str(exc).replace('\n', '%0A').replace('\r', '%0D'), flush=True)
         raise

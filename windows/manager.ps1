@@ -340,7 +340,7 @@ function global:Apply-PVSuggestions([bool]$Enabled) {
     try {
         if (-not (Get-Module PSReadLine)) { Import-Module PSReadLine -ErrorAction Stop }
         $command = Get-Command Set-PSReadLineOption -ErrorAction Stop
-        if (-not $command.Parameters.ContainsKey('PredictionSource') -or -not $command.Parameters.ContainsKey('PredictionViewStyle')) {
+        if (-not $command.Parameters.ContainsKey('PredictionSource')) {
             if ($Enabled) { Write-Warning 'History suggestions need PSReadLine 2.1 or newer. Update PowerShell Void or install PSReadLine 2.3.6 for the current user, then restart PowerShell.' }
             return
         }
@@ -348,7 +348,12 @@ function global:Apply-PVSuggestions([bool]$Enabled) {
         $source = [string]$options.PredictionSource
         if ($Enabled) {
             $newSource = switch ($source) { 'None' { 'History' } 'Plugin' { 'HistoryAndPlugin' } default { $source } }
-            Set-PSReadLineOption -PredictionSource $newSource -PredictionViewStyle InlineView -ErrorAction Stop
+            if ($command.Parameters.ContainsKey('PredictionViewStyle')) {
+                Set-PSReadLineOption -PredictionSource $newSource -PredictionViewStyle InlineView -ErrorAction Stop
+            } else {
+                # PSReadLine 2.1 has only inline predictions and no view-style parameter.
+                Set-PSReadLineOption -PredictionSource $newSource -ErrorAction Stop
+            }
             if ([string]$options.HistorySaveStyle -eq 'SaveNothing') { Write-Warning 'PSReadLine history saving is disabled in your settings; suggestions will not persist between sessions.' }
         } else {
             $newSource = switch ($source) { 'History' { 'None' } 'HistoryAndPlugin' { 'Plugin' } default { $source } }

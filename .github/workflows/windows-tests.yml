@@ -137,8 +137,14 @@ jobs:
       - name: Install predictive PSReadLine for Windows PowerShell 5.1
         shell: powershell
         run: |
+          Install-Module PSReadLine -RequiredVersion 2.1.0 -Scope CurrentUser -Repository PSGallery -AllowClobber -Force
           Install-Module PSReadLine -RequiredVersion 2.3.6 -Scope CurrentUser -Repository PSGallery -AllowClobber -Force
-          "PV_PS5_MODULE_DIR=$(Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules')" >> $env:GITHUB_ENV
+          $moduleRoot = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules'
+          $legacyRoot = Join-Path $env:RUNNER_TEMP 'psreadline-legacy'
+          New-Item -ItemType Directory -Force -Path (Join-Path $legacyRoot 'PSReadLine') | Out-Null
+          Copy-Item (Join-Path $moduleRoot 'PSReadLine\2.1.0') (Join-Path $legacyRoot 'PSReadLine') -Recurse
+          "PV_PS5_MODULE_DIR=$moduleRoot" >> $env:GITHUB_ENV
+          "PV_PS5_LEGACY_MODULE_DIR=$legacyRoot" >> $env:GITHUB_ENV
       - name: Test interactive manager and shortcut
         shell: pwsh
         run: |
