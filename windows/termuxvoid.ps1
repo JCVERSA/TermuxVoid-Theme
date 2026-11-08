@@ -7,7 +7,10 @@ Installs or removes the TermuxVoid prompt for the current Windows PowerShell hos
 param(
     [switch]$Uninstall,
     [switch]$Update,
-    [switch]$SkipDependencyInstall
+    [switch]$SkipDependencyInstall,
+    # Test-only paths. The generated profile is intended for the real user's HOME.
+    [Parameter(DontShow)] [string]$TestHome,
+    [Parameter(DontShow)] [string]$TestProfile
 )
 
 $ErrorActionPreference = 'Stop'
@@ -17,12 +20,15 @@ if ($env:OS -ne 'Windows_NT') {
 }
 
 # The two PowerShell editions use different profiles and get separate installations.
-$themeBase = Join-Path $HOME '.config\TermuxVoid-Windows'
+if ([bool]$TestHome -ne [bool]$TestProfile) { throw 'Both test paths must be provided together.' }
+$homeDir = if ($TestHome) { $TestHome } else { $HOME }
+$profilePath = if ($TestProfile) { $TestProfile } else { $PROFILE.CurrentUserCurrentHost }
+if (-not $profilePath) { throw 'The current host profile is unavailable. Run this in a PowerShell host with a user profile.' }
+$themeBase = Join-Path $homeDir '.config\TermuxVoid-Windows'
 $themeDir = Join-Path $themeBase $PSVersionTable.PSEdition
 $configPath = Join-Path $themeDir 'starship.toml'
 $manifestPath = Join-Path $themeDir 'manifest.json'
 $installedScript = Join-Path $themeDir 'termuxvoid.ps1'
-$profilePath = $PROFILE.CurrentUserCurrentHost
 $startMarker = '# >>> TermuxVoid Windows >>>'
 $endMarker = '# <<< TermuxVoid Windows <<<'
 
