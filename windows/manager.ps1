@@ -1,6 +1,6 @@
 # PowerShell Void manager. Installer-owned templates remain unchanged.
 # Functions use a distinct namespace to avoid interfering with the user's profile.
-if (@('Invoke-PowerShellVoidManager', 'Get-PVPaths', 'Get-PVManifest', 'Assert-PVOwnedFile', 'Backup-PVFiles', 'Read-PVChoice', 'Read-PVText', 'Get-PVPromptState', 'Set-PVPromptState', 'Get-PVAnimationState', 'Set-PVAnimationState', 'Get-PVColorNames', 'Get-PVPalette', 'Set-PVPalette', 'Get-PVTargets', 'Show-PVAnimations', 'Show-PVPrompt', 'Show-PVColors', 'Show-PVMaintenance', 'Start-PVShortcut' | Where-Object {
+if (@('Invoke-PowerShellVoidManager', 'Get-PVPaths', 'Get-PVManifest', 'Get-PVFileHash', 'Assert-PVOwnedFile', 'Backup-PVFiles', 'Read-PVChoice', 'Read-PVText', 'Get-PVPromptState', 'Set-PVPromptState', 'Get-PVAnimationState', 'Set-PVAnimationState', 'Get-PVColorNames', 'Get-PVPalette', 'Set-PVPalette', 'Get-PVTargets', 'Show-PVAnimations', 'Show-PVPrompt', 'Show-PVColors', 'Show-PVMaintenance', 'Start-PVShortcut' | Where-Object {
     Get-Command $_ -ErrorAction SilentlyContinue
 }).Count -gt 0) { return }
 
@@ -21,9 +21,21 @@ function global:Get-PVManifest([string]$Edition) {
     return $manifest
 }
 
+function global:Get-PVFileHash([string]$Path) {
+    $algorithm = [System.Security.Cryptography.SHA256]::Create()
+    $stream = $null
+    try {
+        $stream = [System.IO.File]::OpenRead($Path)
+        return [BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-', '')
+    } finally {
+        if ($stream) { $stream.Dispose() }
+        $algorithm.Dispose()
+    }
+}
+
 function global:Assert-PVOwnedFile($Manifest, [string]$Path, [string]$Name) {
     $expected = $Manifest.hashes.$Name
-    if (-not $expected -or -not (Test-Path -LiteralPath $Path -PathType Leaf) -or (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash -ne $expected) {
+    if (-not $expected -or -not (Test-Path -LiteralPath $Path -PathType Leaf) -or (Get-PVFileHash $Path) -ne $expected) {
         throw "Managed file is missing or modified: $Path. Resolve this before making changes."
     }
 }
@@ -43,7 +55,7 @@ function global:Get-PVPromptState([string]$Edition) {
     if ($saved.DirectoryColor -notmatch '^#[0-9a-fA-F]{6}$' -or $saved.PromptHash -notmatch '^[0-9A-Fa-f]{64}$' -or $saved.SourceHash -notmatch '^[0-9A-Fa-f]{64}$') {
         throw "Invalid prompt settings: $($paths.PromptSettings)"
     }
-    if (-not (Test-Path -LiteralPath $paths.Prompt -PathType Leaf) -or (Get-FileHash -LiteralPath $paths.Prompt -Algorithm SHA256).Hash -ne $saved.PromptHash) {
+    if (-not (Test-Path -LiteralPath $paths.Prompt -PathType Leaf) -or (Get-PVFileHash $paths.Prompt) -ne $saved.PromptHash) {
         throw "Custom prompt is missing or has been edited: $($paths.Prompt). It was not changed."
     }
     $defaults.DirectoryColor = $saved.DirectoryColor
@@ -95,13 +107,13 @@ function global:Set-PVPromptState([string[]]$Editions, [string]$Key, $Value) {
         if (-not $state.Status) { $format = $format.Replace('$character', '>') }
         $toml = $toml.Substring(0, $start) + $format + $toml.Substring($end + 3)
         $toml = $toml.Replace('bold #87FF00', ('bold ' + $state.DirectoryColor.ToUpperInvariant()))
-        $plans += @{ Edition = $edition; Paths = $paths; State = $state; Toml = $toml; SourceHash = (Get-FileHash -LiteralPath $template -Algorithm SHA256).Hash }
+        $plans += @{ Edition = $edition; Paths = $paths; State = $state; Toml = $toml; SourceHash = (Get-PVFileHash $template) }
     }
     foreach ($plan in $plans) {
         $paths = $plan.Paths
         Backup-PVFiles $paths.Base @($paths.Prompt, $paths.PromptSettings)
         [System.IO.File]::WriteAllText($paths.Prompt, $plan.Toml, [System.Text.UTF8Encoding]::new($false))
-        $plan.State.PromptHash = (Get-FileHash -LiteralPath $paths.Prompt -Algorithm SHA256).Hash
+        $plan.State.PromptHash = (Get-PVFileHash $paths.Prompt)
         $plan.State.SourceHash = $plan.SourceHash
         [System.IO.File]::WriteAllText($paths.PromptSettings, ($plan.State | ConvertTo-Json), [System.Text.UTF8Encoding]::new($false))
         if ($plan.Edition -eq $PSVersionTable.PSEdition) { $env:STARSHIP_CONFIG = $paths.Prompt }
@@ -191,7 +203,7 @@ function global:Set-PVPalette([string[]]$Editions, [string]$Field, [string]$Valu
             }
         } else { $palette[$Field] = $Value.ToUpperInvariant() }
         if (Test-Path -LiteralPath $paths.Fragment) {
-            if (-not $manifest.terminalFragmentHash -or (Get-FileHash -LiteralPath $paths.Fragment -Algorithm SHA256).Hash -ne $manifest.terminalFragmentHash) {
+            if (-not $manifest.terminalFragmentHash -or (Get-PVFileHash $paths.Fragment) -ne $manifest.terminalFragmentHash) {
                 throw "Windows Terminal fragment is modified or unowned: $($paths.Fragment). No changes made."
             }
             $fragment = Get-Content -LiteralPath $paths.Fragment -Raw | ConvertFrom-Json
@@ -219,7 +231,7 @@ function global:Set-PVPalette([string[]]$Editions, [string]$Field, [string]$Valu
         try {
             [System.IO.File]::WriteAllText($paths.Fragment, ($plan.Fragment | ConvertTo-Json -Depth 8), [System.Text.UTF8Encoding]::new($false))
             $plan.Manifest | Add-Member -NotePropertyName terminalColors -NotePropertyValue $plan.Palette -Force
-            $plan.Manifest | Add-Member -NotePropertyName terminalFragmentHash -NotePropertyValue (Get-FileHash -LiteralPath $paths.Fragment -Algorithm SHA256).Hash -Force
+            $plan.Manifest | Add-Member -NotePropertyName terminalFragmentHash -NotePropertyValue (Get-PVFileHash $paths.Fragment) -Force
             [System.IO.File]::WriteAllText($paths.Manifest, ($plan.Manifest | ConvertTo-Json -Depth 8), [System.Text.UTF8Encoding]::new($false))
         } catch { throw "Could not save the Terminal profile. Restore the printed backup before retrying: $($_.Exception.Message)" }
     }
@@ -440,7 +452,7 @@ if (-not (Get-Command psvoid -ErrorAction SilentlyContinue)) {
             $state = Get-PVPromptState $PSVersionTable.PSEdition
             $env:STARSHIP_CONFIG = $paths.Prompt
             $template = Join-Path $paths.Theme 'starship.toml'
-            if ((Test-Path -LiteralPath $template -PathType Leaf) -and (Get-FileHash -LiteralPath $template -Algorithm SHA256).Hash -ne $state.SourceHash) {
+            if ((Test-Path -LiteralPath $template -PathType Leaf) -and (Get-PVFileHash $template) -ne $state.SourceHash) {
                 Write-Warning 'PowerShell Void prompt template changed; use psvoid > Prompt components > Reapply to pick up the new template.'
             }
         } catch { Write-Warning $_.Exception.Message }
