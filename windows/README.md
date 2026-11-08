@@ -58,7 +58,7 @@ Install-TermuxVoidAnimation -Engine TTE
 Enable-TermuxVoidWelcome
 ```
 
-Open a new Windows Terminal tab for the TTE welcome. Turn it off with `Disable-TermuxVoidWelcome`. To skip it temporarily, set `$env:TERMUXVOID_NO_ANIMATION = '1'` before launching a child shell. Welcome playback only runs in an interactive Windows Terminal session; redirected input/output, `TERM=dumb`, small terminals, and the opt-out use a static message or skip playback. It does not run from the Starship prompt. If TTE is unavailable or fails, the prompt still loads with a plain-text fallback.
+Open a new Windows Terminal tab for the TTE welcome. Turn it off with `Disable-TermuxVoidWelcome`. To skip it temporarily, set `$env:TERMUXVOID_NO_ANIMATION = '1'` before launching a child shell. Welcome playback only runs in an interactive Windows Terminal session; redirected input/output, `TERM=dumb`, `NO_COLOR`, small terminals, and the opt-out use a static message or skip playback. It does not run from the Starship prompt. If TTE is unavailable or fails, the prompt still loads with a plain-text fallback.
 
 Try the other engines **on demand**:
 

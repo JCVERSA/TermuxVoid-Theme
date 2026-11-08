@@ -1,6 +1,8 @@
 # TermuxVoid optional animations. Dot-sourced from the user's managed profile.
 # No package is installed or animation played unless the user opts in.
-if (Get-Command Show-TermuxVoidAnimation -ErrorAction SilentlyContinue) { return }
+foreach ($name in @('Get-TermuxVoidAnimationPaths', 'Install-TermuxVoidAnimation', 'Show-TermuxVoidAnimation', 'Enable-TermuxVoidWelcome', 'Disable-TermuxVoidWelcome')) {
+    if (Get-Command $name -CommandType Function -ErrorAction SilentlyContinue) { return }
+}
 
 function global:Get-TermuxVoidAnimationPaths {
     $base = Join-Path $HOME '.config\TermuxVoid-Windows'

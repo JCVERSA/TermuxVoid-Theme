@@ -73,6 +73,26 @@ try {
     [Array]::Copy($afterUpdate, $prefix, $prefix.Length)
     Assert (BytesEqual $beforeUpdate $prefix) 'legacy profile bytes preserved on migration'
     Assert (([System.IO.File]::ReadAllText($profilePath)).Contains('# >>> TermuxVoid Animations >>>')) 'animation block migrated'
+    [byte[]]$migratedProfile = [System.IO.File]::ReadAllBytes($profilePath)
+    & $installer @testPaths -Update -SkipDependencyInstall
+    Assert (BytesEqual $migratedProfile ([System.IO.File]::ReadAllBytes($profilePath))) 'subsequent update keeps profile unchanged'
+    $animationPath = Join-Path $themeDir 'animation.ps1'
+    Add-Content -LiteralPath $animationPath -Value '# User edit'
+    $failed = $false
+    try { & $installer @testPaths -Update -SkipDependencyInstall } catch { $failed = $true }
+    Assert $failed 'update refuses to overwrite modified animation helper'
+    Assert ((Get-Content -LiteralPath $animationPath -Raw).Contains('# User edit')) 'modified animation helper retained'
+    Copy-Item -LiteralPath (Join-Path (Split-Path -Parent $PSScriptRoot) 'windows\animation.ps1') -Destination $animationPath -Force
+    $profileText = [System.IO.File]::ReadAllText($profilePath).Replace('Remove-Variable termuxVoidAnimation', 'Remove-Variable changedAnimation')
+    [System.IO.File]::WriteAllText($profilePath, $profileText, [System.Text.UTF8Encoding]::new($false))
+    $failed = $false
+    try { & $installer @testPaths -Update -SkipDependencyInstall } catch { $failed = $true }
+    Assert $failed 'update rejects edited animation profile block'
+    $failed = $false
+    try { & $installer @testPaths -Uninstall } catch { $failed = $true }
+    Assert $failed 'uninstall rejects edited animation profile block'
+    Assert (Test-Path -LiteralPath $animationPath) 'blocked uninstall leaves animation helper in place'
+    [System.IO.File]::WriteAllBytes($profilePath, $migratedProfile)
     Assert ((Get-Content -LiteralPath $configPath -Raw).Contains('${env_var.USERNAME}')) 'update installs username prompt'
     Add-Content -LiteralPath $configPath -Value '# Custom edit'
     $failed = $false
