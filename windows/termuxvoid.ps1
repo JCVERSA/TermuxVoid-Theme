@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-Installs or removes the TermuxVoid prompt for the current Windows PowerShell host.
+Installs or removes the PowerShell Void prompt for the current Windows PowerShell host.
 #>
 [CmdletBinding()]
 param(
@@ -265,7 +265,7 @@ if ($Update) {
     }
 } else {
     if ($starts.Count -ne 0 -or $ends.Count -ne 0 -or $animationStarts.Count -ne 0 -or $animationEnds.Count -ne 0) {
-        throw 'TermuxVoid markers already exist in this profile. Use -Update or resolve them before installing.'
+        throw 'PowerShell Void legacy TermuxVoid markers already exist in this profile. Use -Update or resolve them before installing.'
     }
     if (Test-Path -LiteralPath $themeDir) {
         throw "Installation directory already exists: $themeDir. No files were overwritten."

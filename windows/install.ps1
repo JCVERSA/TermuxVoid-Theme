@@ -36,7 +36,7 @@ try {
     $exe = (Get-Process -Id $PID).Path
     if (-not $exe) { throw 'Cannot find the current PowerShell executable.' }
     & $exe @arguments
-    if ($LASTEXITCODE -ne 0) { throw "TermuxVoid setup failed (exit code $LASTEXITCODE)." }
+    if ($LASTEXITCODE -ne 0) { throw "PowerShell Void setup failed (exit code $LASTEXITCODE)." }
 } finally {
     if (Test-Path -LiteralPath $tempDir) { Remove-Item -LiteralPath $tempDir -Recurse -Force }
 }
