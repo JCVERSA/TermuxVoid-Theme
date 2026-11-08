@@ -71,6 +71,7 @@ function global:Set-PVPromptState([string[]]$Editions, [string]$Key, $Value) {
     foreach ($edition in $Editions) {
         $paths = Get-PVPaths $edition
         $manifest = Get-PVManifest $edition
+        Assert-PVOwnedFile $manifest (Join-Path $paths.Theme 'manager.ps1') 'manager.ps1'
         $template = Join-Path $paths.Theme 'starship.toml'
         Assert-PVOwnedFile $manifest $template 'starship.toml'
         $state = Get-PVPromptState $edition
@@ -124,8 +125,9 @@ function global:Set-PVAnimationState([string[]]$Editions, [string]$Key, $Value) 
     } elseif ($Value -isnot [bool]) { throw 'Animation switches must be boolean.' }
     $plans = @()
     foreach ($edition in $Editions) {
-        $null = Get-PVManifest $edition
+        $manifest = Get-PVManifest $edition
         $paths = Get-PVPaths $edition
+        Assert-PVOwnedFile $manifest (Join-Path $paths.Theme 'manager.ps1') 'manager.ps1'
         $state = Get-PVAnimationState $edition
         $state[$Key] = $Value
         $plans += @{ Edition = $edition; Paths = $paths; State = $state }
@@ -154,6 +156,7 @@ function global:Get-PVColorNames {
 function global:Get-PVPalette([string]$Edition) {
     $paths = Get-PVPaths $Edition
     $manifest = Get-PVManifest $Edition
+    Assert-PVOwnedFile $manifest (Join-Path $paths.Theme 'manager.ps1') 'manager.ps1'
     $schemePath = Join-Path $paths.Theme 'termuxvoid-scheme.json'
     Assert-PVOwnedFile $manifest $schemePath 'termuxvoid-scheme.json'
     $scheme = Get-Content -LiteralPath $schemePath -Raw | ConvertFrom-Json

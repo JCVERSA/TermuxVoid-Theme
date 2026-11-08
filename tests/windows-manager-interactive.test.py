@@ -1,4 +1,5 @@
 """Exercise the manager's keyboard and numbered UI in a Windows pseudoconsole."""
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -23,7 +24,10 @@ def run(shell):
         for edition in ('Core', 'Desktop'):
             theme = base / edition
             theme.mkdir(parents=True)
-            (theme / 'manifest.json').write_text(json.dumps({'profilePath': 'test-profile', 'hashes': {'dummy': 'fake'}}))
+            manager = (ROOT / 'windows/manager.ps1').read_bytes()
+            (theme / 'manager.ps1').write_bytes(manager)
+            digest = hashlib.sha256(manager).hexdigest().upper()
+            (theme / 'manifest.json').write_text(json.dumps({'profilePath': 'test-profile', 'hashes': {'manager.ps1': digest}}))
         setup = folder / 'setup.ps1'
         setup.write_text(f"""
 $ErrorActionPreference = 'Stop'
@@ -110,7 +114,9 @@ $ErrorActionPreference = 'Stop'
 $env:WT_SESSION = 'test'
 Import-Module PSReadLine
 Set-PSReadLineKeyHandler -Chord 'Ctrl+Alt+v' -BriefDescription 'ExistingBinding' -ScriptBlock {{ }}
+Set-Alias -Name psvoid -Value Get-Date -Scope Global
 . {quote(ROOT / 'windows/manager.ps1')}
+if ((Get-Alias psvoid).Definition -ne 'Get-Date' -or -not (Get-Command Invoke-PowerShellVoidManager)) {{ throw 'Existing command was not preserved.' }}
 Write-Host ('[[CONFLICT:' + (Get-PSReadLineKeyHandler -Chord 'Ctrl+Alt+v').Function + ']]')
 """, encoding='utf-8')
         proc = PtyProcess.spawn([shell, '-NoProfile', '-NoLogo', '-NoExit', '-File', str(setup)], dimensions=(30, 120))
