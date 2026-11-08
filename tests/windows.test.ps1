@@ -90,6 +90,28 @@ try {
     Assert ((Get-ChildItem -LiteralPath (Join-Path $testRoot '.config\TermuxVoid-Windows\backups')).Count -ge 1) 'backups created'
     Remove-Item -LiteralPath $themeDir -Recurse -Force
 
+    # Terminal profile creation is opt-in, separate from user settings, and reversible.
+    & $installer @testPaths -SkipDependencyInstall -TerminalProfile
+    $fragmentPath = Join-Path $testRoot ('LocalAppData\Microsoft\Windows Terminal\Fragments\TermuxVoid-Theme\' + $PSVersionTable.PSEdition + '.json')
+    Assert (Test-Path -LiteralPath $fragmentPath) 'optional Terminal fragment created'
+    $fragment = Get-Content -LiteralPath $fragmentPath -Raw | ConvertFrom-Json
+    Assert ($fragment.schemes[0].background -eq '#0B0E1F') 'Terminal fragment contains original background'
+    Assert ($fragment.profiles[0].colorScheme -eq $fragment.schemes[0].name) 'Terminal profile uses the scheme'
+    & $installer @testPaths -Update -SkipDependencyInstall
+    Assert (Test-Path -LiteralPath $fragmentPath) 'update retains optional Terminal fragment'
+    & $installer @testPaths -Uninstall
+    Assert (-not (Test-Path -LiteralPath $fragmentPath)) 'uninstall removes unchanged fragment'
+
+    # A modified fragment must not be overwritten or deleted.
+    & $installer @testPaths -SkipDependencyInstall -TerminalProfile
+    Add-Content -LiteralPath $fragmentPath -Value ' '
+    [byte[]]$modifiedFragment = [System.IO.File]::ReadAllBytes($fragmentPath)
+    & $installer @testPaths -Update -SkipDependencyInstall
+    Assert (BytesEqual $modifiedFragment ([System.IO.File]::ReadAllBytes($fragmentPath))) 'update preserves modified fragment'
+    & $installer @testPaths -Uninstall
+    Assert (Test-Path -LiteralPath $fragmentPath) 'uninstall retains modified fragment'
+    Remove-Item -LiteralPath $fragmentPath -Force
+
     # Simulate WinGet without installing a real package or depending on machine PATH.
     $oldPath = $env:PATH
     $oldLog = $env:TERMUXVOID_TEST_LOG

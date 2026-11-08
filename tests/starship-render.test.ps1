@@ -14,7 +14,7 @@ try {
     try {
         $success = & $Starship prompt '--status=0' '--jobs=0' '--terminal-width=120' | Out-String
         if ($LASTEXITCODE -ne 0) { throw 'Starship failed to render success prompt' }
-        $failure = & $Starship prompt '--status=1' '--jobs=1' '--terminal-width=120' | Out-String
+        $failure = & $Starship prompt '--status=1' '--jobs=1' '--cmd-duration=3400' '--terminal-width=120' | Out-String
         if ($LASTEXITCODE -ne 0) { throw 'Starship failed to render failure prompt' }
         if (-not $success.Contains($env:USERNAME)) { throw "Username missing from prompt; expected $env:USERNAME; got: $($success -replace '[\x1b\r\n]', ' ')" }
         if (-not $success.Contains('termuxvoid-test')) { throw 'Git branch missing from prompt' }
@@ -22,6 +22,7 @@ try {
         if (-not $success.Contains([char]0x2705)) { throw 'Success icon missing' }
         if (-not $failure.Contains([char]0x274c)) { throw 'Failure icon missing' }
         if (-not $failure.Contains([char]0x23f3)) { throw 'Running jobs icon missing' }
+        if (-not $failure.Contains('took')) { throw 'Command duration missing' }
     } finally { Pop-Location }
     Write-Host 'PASS: Starship prompt rendering'
 } finally {

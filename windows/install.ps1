@@ -6,6 +6,8 @@ Downloads the Windows theme installer and runs a fresh install or guarded update
 [CmdletBinding()]
 param(
     [switch]$SkipDependencyInstall,
+    [switch]$TerminalProfile,
+    [switch]$SkipTerminalProfile,
     # These paths are for isolated integration tests only.
     [Parameter(DontShow)] [string]$TestHome,
     [Parameter(DontShow)] [string]$TestProfile
@@ -22,12 +24,14 @@ $homeDir = if ($TestHome) { $TestHome } else { $HOME }
 $themeDir = Join-Path (Join-Path $homeDir '.config\TermuxVoid-Windows') $PSVersionTable.PSEdition
 try {
     New-Item -ItemType Directory -Path $tempDir | Out-Null
-    foreach ($file in @('termuxvoid.ps1', 'starship.toml')) {
+    foreach ($file in @('termuxvoid.ps1', 'starship.toml', 'termuxvoid-scheme.json')) {
         Invoke-WebRequest -UseBasicParsing -Uri "$baseUrl/$file" -OutFile (Join-Path $tempDir $file)
     }
     $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $tempDir 'termuxvoid.ps1'))
     if (Test-Path -LiteralPath $themeDir) { $arguments += '-Update' }
     if ($SkipDependencyInstall) { $arguments += '-SkipDependencyInstall' }
+    if ($TerminalProfile) { $arguments += '-TerminalProfile' }
+    if ($SkipTerminalProfile) { $arguments += '-SkipTerminalProfile' }
     if ($TestHome) { $arguments += @('-TestHome', $TestHome, '-TestProfile', $TestProfile) }
     $exe = (Get-Process -Id $PID).Path
     if (-not $exe) { throw 'Cannot find the current PowerShell executable.' }

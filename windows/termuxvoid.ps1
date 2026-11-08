@@ -8,6 +8,8 @@ param(
     [switch]$Uninstall,
     [switch]$Update,
     [switch]$SkipDependencyInstall,
+    [switch]$TerminalProfile,
+    [switch]$SkipTerminalProfile,
     # Test-only paths. The generated profile is intended for the real user's HOME.
     [Parameter(DontShow)] [string]$TestHome,
     [Parameter(DontShow)] [string]$TestProfile
@@ -15,6 +17,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 if ($Uninstall -and $Update) { throw 'Choose either -Uninstall or -Update.' }
+if ($TerminalProfile -and $SkipTerminalProfile) { throw 'Choose either -TerminalProfile or -SkipTerminalProfile.' }
 if ($env:OS -ne 'Windows_NT') {
     throw 'This installer is for Windows. Run it in PowerShell on Windows.'
 }
@@ -29,6 +32,10 @@ $themeDir = Join-Path $themeBase $PSVersionTable.PSEdition
 $configPath = Join-Path $themeDir 'starship.toml'
 $manifestPath = Join-Path $themeDir 'manifest.json'
 $installedScript = Join-Path $themeDir 'termuxvoid.ps1'
+# A separate Windows Terminal fragment avoids rewriting the user's settings.json.
+$localAppData = if ($TestHome) { Join-Path $TestHome 'LocalAppData' } else { $env:LOCALAPPDATA }
+$fragmentDir = if ($localAppData) { Join-Path $localAppData 'Microsoft\Windows Terminal\Fragments\TermuxVoid-Theme' } else { $null }
+$fragmentPath = if ($fragmentDir) { Join-Path $fragmentDir ($PSVersionTable.PSEdition + '.json') } else { $null }
 $startMarker = '# >>> TermuxVoid Windows >>>'
 $endMarker = '# <<< TermuxVoid Windows <<<'
 
@@ -78,6 +85,45 @@ function Backup-Profile {
     }
 }
 
+
+function Save-TerminalProfile($Manifest, $PreviousHash) {
+    if (-not $fragmentPath) { throw 'LOCALAPPDATA is unavailable; cannot create a Terminal profile.' }
+    $schemeFile = Join-Path $PSScriptRoot 'termuxvoid-scheme.json'
+    if (-not (Test-Path -LiteralPath $schemeFile -PathType Leaf)) { throw 'Windows Terminal color scheme is missing.' }
+    if (Test-Path -LiteralPath $fragmentPath) {
+        if (-not $PreviousHash -or (Get-FileHash -LiteralPath $fragmentPath -Algorithm SHA256).Hash -ne $PreviousHash) {
+            throw "A modified or unowned fragment already exists: $fragmentPath. It was not overwritten."
+        }
+        $backupDir = Join-Path $themeBase ('backups\terminal-' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
+        Copy-Item -LiteralPath $fragmentPath -Destination (Join-Path $backupDir 'fragment.json')
+        Write-Host "Terminal fragment backup: $backupDir"
+    }
+    $scheme = Get-Content -LiteralPath $schemeFile -Raw | ConvertFrom-Json
+    $scheme.name = 'TermuxVoid ' + $PSVersionTable.PSEdition
+    $powerShellPath = (Get-Process -Id $PID).Path
+    if (-not $powerShellPath) { throw 'Cannot find the current PowerShell executable.' }
+    $profileGuid = if ($PSVersionTable.PSEdition -eq 'Core') { '{c04eb7b9-0a8d-4fc1-a6c6-dd5b94effd81}' } else { '{b29cc26a-e530-4639-a25b-34e13e5cd7b2}' }
+    $label = if ($PSVersionTable.PSEdition -eq 'Core') { 'TermuxVoid PowerShell 7' } else { 'TermuxVoid Windows PowerShell' }
+    $profile = @{ name = $label; guid = $profileGuid; commandline = '"' + $powerShellPath + '"'; colorScheme = $scheme.name }
+    $fragment = @{ profiles = @($profile); schemes = @($scheme) } | ConvertTo-Json -Depth 8
+    New-Item -ItemType Directory -Path $fragmentDir -Force | Out-Null
+    [System.IO.File]::WriteAllText($fragmentPath, $fragment, [System.Text.UTF8Encoding]::new($false))
+    $Manifest.terminalFragmentHash = (Get-FileHash -LiteralPath $fragmentPath -Algorithm SHA256).Hash
+    [System.IO.File]::WriteAllText($manifestPath, ($Manifest | ConvertTo-Json -Depth 8), [System.Text.UTF8Encoding]::new($false))
+    Write-Host "Added Windows Terminal profile '$label'. Select it from Terminal's profile menu after restarting."
+    Write-Host 'The matching Nerd Font is optional; see the Windows guide for installation and licensing notes.'
+}
+
+function Should-CreateTerminalProfile($PreviousHash) {
+    if ($SkipTerminalProfile) { return $false }
+    if ($TerminalProfile -or $PreviousHash) { return $true }
+    # Automated integration tests run non-interactively against isolated paths.
+    if ($TestHome) { return $false }
+    $answer = Read-Host 'Add a separate TermuxVoid Windows Terminal profile with matching colors? [y/N]'
+    return $answer -match '^(y|yes)$'
+}
+
 [byte[]]$profileBytes = @()
 if (Test-Path -LiteralPath $profilePath -PathType Leaf) {
     $profileBytes = [System.IO.File]::ReadAllBytes($profilePath)
@@ -118,6 +164,16 @@ if ($Uninstall) {
     }
 
     if ($null -ne $manifest) {
+        if ($manifest.terminalFragmentHash -and $fragmentPath -and (Test-Path -LiteralPath $fragmentPath -PathType Leaf)) {
+            if ((Get-FileHash -LiteralPath $fragmentPath -Algorithm SHA256).Hash -eq $manifest.terminalFragmentHash) {
+                Remove-Item -LiteralPath $fragmentPath
+                Write-Host 'Removed the unchanged Windows Terminal fragment.'
+            } else {
+                Write-Warning "Retained modified Windows Terminal fragment: $fragmentPath"
+            }
+        } elseif ($manifest.terminalFragmentHash -and -not $fragmentPath) {
+            Write-Warning 'LOCALAPPDATA is unavailable; the Windows Terminal fragment was retained.'
+        }
         # Only known files whose contents still match the manifest are deleted.
         foreach ($file in @('starship.toml', 'termuxvoid.ps1')) {
             $path = Join-Path $themeDir $file
@@ -211,10 +267,15 @@ if ($Update) {
                 'termuxvoid.ps1' = (Get-FileHash -LiteralPath $installedScript -Algorithm SHA256).Hash
             }
         }
+        if ($oldManifest.terminalFragmentHash) { $manifest.terminalFragmentHash = $oldManifest.terminalFragmentHash }
         [System.IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json), [System.Text.UTF8Encoding]::new($false))
     } catch {
         Write-Warning "Update failed. Restore the three files from $backupDir before retrying."
         throw
+    }
+    if (Should-CreateTerminalProfile $oldManifest.terminalFragmentHash) {
+        try { Save-TerminalProfile $manifest $oldManifest.terminalFragmentHash }
+        catch { Write-Warning "Terminal profile not changed: $($_.Exception.Message)" }
     }
     Write-Host 'Update complete. Restart Windows Terminal to refresh PATH and load the new prompt.'
     return
@@ -241,5 +302,9 @@ try {
 } catch {
     Write-Warning "Installation failed. Check the profile and backup before retrying; installation files may remain in $themeDir."
     throw
+}
+if (Should-CreateTerminalProfile $null) {
+    try { Save-TerminalProfile $manifest $null }
+    catch { Write-Warning "Terminal profile not changed: $($_.Exception.Message)" }
 }
 Write-Host 'Installation complete. Restart Windows Terminal to refresh PATH and load the prompt. See windows/README.md for colors and uninstall.'

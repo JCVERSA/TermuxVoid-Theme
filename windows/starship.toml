@@ -6,6 +6,12 @@ ${env_var.USERNAME}\
 $directory\
 $git_branch\
 $git_status\
+$nodejs\
+$python\
+$rust\
+$dotnet\
+$package\
+$cmd_duration\
 $time\
 $jobs\
 \n[╰─](white)$character"""
@@ -45,3 +51,29 @@ format = ' [$symbol$number]($style)'
 [character]
 success_symbol = '[✅ ❯](bold green)'
 error_symbol = '[❌ ❯](bold red)'
+
+# Only visible when Starship detects the corresponding project files.
+[nodejs]
+symbol = 'Node '
+format = ' \[[$symbol$version]($style)\]'
+
+[python]
+symbol = 'Py '
+format = ' \[[$symbol$version( \($virtualenv\))]($style)\]'
+
+[rust]
+symbol = 'Rust '
+format = ' \[[$symbol$version]($style)\]'
+
+[dotnet]
+symbol = '.NET '
+format = ' \[[$symbol$version]($style)\]'
+
+[package]
+symbol = 'pkg '
+format = ' \[[$symbol$version]($style)\]'
+
+[cmd_duration]
+min_time = 2000
+format = ' [took $duration]($style)'
+style = 'bold yellow'
