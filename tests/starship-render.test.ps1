@@ -9,6 +9,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'git init failed' }
     & git -C $repo symbolic-ref HEAD refs/heads/termuxvoid-test
     if ($LASTEXITCODE -ne 0) { throw 'git symbolic-ref failed' }
+    [System.IO.File]::WriteAllText((Join-Path $repo 'package.json'), '{"name":"test-project","version":"2.3.4"}')
     $env:STARSHIP_CONFIG = (Resolve-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'windows\starship.toml')).Path
     Push-Location $repo
     try {
@@ -18,6 +19,8 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Starship failed to render failure prompt' }
         if (-not $success.Contains($env:USERNAME)) { throw "Username missing from prompt; expected $env:USERNAME; got: $($success -replace '[\x1b\r\n]', ' ')" }
         if (-not $success.Contains('termuxvoid-test')) { throw 'Git branch missing from prompt' }
+        if (-not $success.Contains('pkg 2.3.4')) { throw 'Package version missing from prompt' }
+        if (-not $success.Contains('Node ')) { throw 'Node project context missing from prompt' }
         if ($success -notmatch '\d{2}:\d{2}:\d{2}') { throw 'Time missing from prompt' }
         if (-not $success.Contains([char]0x2705)) { throw 'Success icon missing' }
         if (-not $failure.Contains([char]0x274c)) { throw 'Failure icon missing' }
