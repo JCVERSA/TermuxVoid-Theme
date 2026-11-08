@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import queue
+import re
 import tempfile
 import threading
 import time
@@ -68,7 +69,8 @@ Write-Host '[[MENU-READY]]'
                     pass
                 if ''.join(output).count(text) >= count:
                     return
-            raise AssertionError(f'{shell}: missing {text!r} count {count}, output: {"".join(output)[-7000:]}')
+            clean = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', ''.join(output))
+            raise AssertionError(f'{shell}: missing {text!r} count {count}, output: {clean[-1800:]}')
 
         try:
             wait_for('[[MENU-READY]]')
