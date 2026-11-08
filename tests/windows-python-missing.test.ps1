@@ -23,6 +23,8 @@ try {
     if (-not ((Get-Content -LiteralPath $env:POWERSHELL_VOID_TEST_LOG -Raw).Contains('Python.Python.3.12'))) { throw 'WinGet did not request Python 3.12.' }
     if (Test-Path -LiteralPath (Join-Path $testRoot 'dependencies')) { throw 'Failed runtime installation must not create an environment.' }
     Write-Host 'PASS: missing Python invokes WinGet and reports failure'
+    # The mocked WinGet failed intentionally; do not propagate its native exit code.
+    $global:LASTEXITCODE = 0
 } finally {
     $env:PATH = $oldPath
     $env:POWERSHELL_VOID_TEST_LOG = $oldLog
