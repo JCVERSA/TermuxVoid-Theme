@@ -16,7 +16,15 @@ jobs:
         run: python ./tests/windows-config.test.py
       - name: Test Windows PowerShell 5.1
         shell: powershell
-        run: ./tests/windows.test.ps1
+        run: |
+          try { ./tests/windows.test.ps1 } catch {
+            Write-Output "::error::$($_.Exception.Message) at $($_.ScriptStackTrace)"
+            exit 1
+          }
       - name: Test PowerShell 7
         shell: pwsh
-        run: ./tests/windows.test.ps1
+        run: |
+          try { ./tests/windows.test.ps1 } catch {
+            Write-Output "::error::$($_.Exception.Message) at $($_.ScriptStackTrace)"
+            exit 1
+          }
