@@ -6,7 +6,9 @@ $oldDisable = $env:TERMUXVOID_NO_ANIMATION
 function Assert($Condition, [string]$Message) { if (-not $Condition) { throw "FAIL: $Message" } }
 try {
     New-Item -ItemType Directory -Path $testRoot | Out-Null
+    $name = 'profile value'
     . (Join-Path $root 'windows\animation.ps1')
+    Assert ($name -eq 'profile value') 'loading helpers preserves profile variables'
     # Prevent the test from touching real user data; the helper resolves paths dynamically.
     function global:Get-TermuxVoidAnimationPaths {
         return @{
