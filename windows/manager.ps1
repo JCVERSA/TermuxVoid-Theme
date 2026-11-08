@@ -1,6 +1,6 @@
 # PowerShell Void manager. Installer-owned templates remain unchanged.
 # Functions use a distinct namespace to avoid interfering with the user's profile.
-if (@('Invoke-PowerShellVoidManager', 'Get-PVPaths', 'Get-PVManifest', 'Get-PVFileHash', 'Assert-PVOwnedFile', 'Backup-PVFiles', 'Read-PVChoice', 'Read-PVText', 'Get-PVPromptState', 'Set-PVPromptState', 'Get-PVAnimationState', 'Set-PVAnimationState', 'Get-PVColorNames', 'Get-PVPalette', 'Set-PVPalette', 'Get-PVTargets', 'Show-PVAnimations', 'Show-PVPrompt', 'Show-PVColors', 'Show-PVMaintenance', 'Start-PVShortcut' | Where-Object {
+if (@('Invoke-PowerShellVoidManager', 'Get-PVPaths', 'Get-PVManifest', 'Get-PVFileHash', 'Assert-PVOwnedFile', 'Backup-PVFiles', 'Read-PVChoice', 'Read-PVText', 'Get-PVPromptState', 'Set-PVPromptState', 'Get-PVAnimationState', 'Set-PVAnimationState', 'Get-PVColorNames', 'Get-PVPalette', 'Get-PVUpdatedPalette', 'Get-PVContrast', 'Show-PVChoiceStatus', 'Format-PVValues', 'Confirm-PVMixedChange', 'Confirm-PVPalette', 'Set-PVPalette', 'Get-PVTargets', 'Show-PVAnimations', 'Show-PVPrompt', 'Show-PVColors', 'Show-PVMaintenance', 'Start-PVShortcut' | Where-Object {
     Get-Command $_ -ErrorAction SilentlyContinue
 }).Count -gt 0) { return }
 
@@ -36,7 +36,7 @@ function global:Get-PVFileHash([string]$Path) {
 function global:Assert-PVOwnedFile($Manifest, [string]$Path, [string]$Name) {
     $expected = $Manifest.hashes.$Name
     if (-not $expected -or -not (Test-Path -LiteralPath $Path -PathType Leaf) -or (Get-PVFileHash $Path) -ne $expected) {
-        throw "Managed file is missing or modified: $Path. Resolve this before making changes."
+        throw "Managed file is missing or modified: $Path. No changes made. Back up your changes, then restore the matching installed file or see Windows README > Update an existing Windows installation."
     }
 }
 
@@ -56,7 +56,7 @@ function global:Get-PVPromptState([string]$Edition) {
         throw "Invalid prompt settings: $($paths.PromptSettings)"
     }
     if (-not (Test-Path -LiteralPath $paths.Prompt -PathType Leaf) -or (Get-PVFileHash $paths.Prompt) -ne $saved.PromptHash) {
-        throw "Custom prompt is missing or has been edited: $($paths.Prompt). It was not changed."
+        throw "Custom prompt is missing or has been edited: $($paths.Prompt). No changes made. Back up the prompt and its settings, then restore the matching pair or move both aside to reset the menu settings."
     }
     $defaults.DirectoryColor = $saved.DirectoryColor
     $defaults.PromptHash = $saved.PromptHash
@@ -124,9 +124,9 @@ function global:Set-PVPromptState([string[]]$Editions, [string]$Key, $Value) {
 function global:Get-PVAnimationState([string]$Edition) {
     $paths = Get-PVPaths $Edition
     if (-not (Test-Path -LiteralPath $paths.AnimationSettings)) { return @{ Welcome = $true; Banner = $true; Idle = $true; IdleSeconds = 5 } }
-    try { $state = Get-Content -LiteralPath $paths.AnimationSettings -Raw | ConvertFrom-Json } catch { throw "Invalid animation settings: $($paths.AnimationSettings)" }
+    try { $state = Get-Content -LiteralPath $paths.AnimationSettings -Raw | ConvertFrom-Json } catch { throw "Invalid animation settings: $($paths.AnimationSettings). Back up and correct this JSON, or move it aside to restore defaults; then reopen the menu." }
     if ($state.Welcome -isnot [bool] -or $state.Banner -isnot [bool] -or $state.Idle -isnot [bool] -or
-        ($state.IdleSeconds -isnot [int] -and $state.IdleSeconds -isnot [long]) -or $state.IdleSeconds -lt 1 -or $state.IdleSeconds -gt 3600) { throw "Invalid animation settings: $($paths.AnimationSettings)" }
+        ($state.IdleSeconds -isnot [int] -and $state.IdleSeconds -isnot [long]) -or $state.IdleSeconds -lt 1 -or $state.IdleSeconds -gt 3600) { throw "Invalid animation settings: $($paths.AnimationSettings). Back up and correct this JSON, or move it aside to restore defaults; then reopen the menu." }
     return @{ Welcome = $state.Welcome; Banner = $state.Banner; Idle = $state.Idle; IdleSeconds = $state.IdleSeconds }
 }
 
@@ -181,6 +181,39 @@ function global:Get-PVPalette([string]$Edition) {
     return $result
 }
 
+function global:Get-PVUpdatedPalette($Palette, [string]$Field, [string]$Value, [string]$Edition) {
+    $result = @{}
+    foreach ($name in (Get-PVColorNames)) { $result[$name] = $Palette[$name] }
+    if ($Field -ne 'Preset') { $result[$Field] = $Value.ToUpperInvariant(); return $result }
+    $schemePath = Join-Path (Get-PVPaths $Edition).Theme 'termuxvoid-scheme.json'
+    $original = Get-Content -LiteralPath $schemePath -Raw | ConvertFrom-Json
+    foreach ($name in (Get-PVColorNames)) { $result[$name] = $original.$name.ToUpperInvariant() }
+    if ($Value -eq 'Ocean') {
+        $result.background = '#071927'; $result.foreground = '#D9F6FF'; $result.blue = '#45C5F7'; $result.cyan = '#64FFDA'; $result.purple = '#8F9BFF'
+    } elseif ($Value -eq 'Monochrome') {
+        $result.background = '#151515'; $result.foreground = '#E6E6E6'
+        $result.black = '#242424'; $result.red = '#9B9B9B'; $result.green = '#AFAFAF'; $result.yellow = '#C1C1C1'
+        $result.blue = '#AFAFAF'; $result.purple = '#C0C0C0'; $result.cyan = '#D0D0D0'; $result.white = '#E6E6E6'
+        $result.brightBlack = '#777777'; $result.brightRed = '#B4B4B4'; $result.brightGreen = '#C4C4C4'; $result.brightYellow = '#D4D4D4'
+        $result.brightBlue = '#C4C4C4'; $result.brightPurple = '#D0D0D0'; $result.brightCyan = '#E0E0E0'; $result.brightWhite = '#FFFFFF'
+    }
+    return $result
+}
+
+function global:Get-PVContrast([string]$Foreground, [string]$Background) {
+    $luminances = @()
+    foreach ($hex in @($Foreground, $Background)) {
+        if ($hex -notmatch '^#[0-9a-fA-F]{6}$') { throw 'Use a color such as #16B1FB.' }
+        $channels = @()
+        foreach ($offset in @(1, 3, 5)) {
+            $value = [Convert]::ToInt32($hex.Substring($offset, 2), 16) / 255.0
+            $channels += if ($value -le 0.04045) { $value / 12.92 } else { [Math]::Pow(($value + 0.055) / 1.055, 2.4) }
+        }
+        $luminances += (0.2126 * $channels[0] + 0.7152 * $channels[1] + 0.0722 * $channels[2])
+    }
+    return (([Math]::Max($luminances[0], $luminances[1]) + 0.05) / ([Math]::Min($luminances[0], $luminances[1]) + 0.05))
+}
+
 function global:Set-PVPalette([string[]]$Editions, [string]$Field, [string]$Value) {
     $names = @(Get-PVColorNames)
     if ($Field -ne 'Preset' -and $Field -notin $names) { throw 'Unknown terminal color.' }
@@ -192,19 +225,10 @@ function global:Set-PVPalette([string[]]$Editions, [string]$Field, [string]$Valu
         if (-not $paths.Fragment) { throw 'LOCALAPPDATA is unavailable; cannot manage a Windows Terminal profile.' }
         $manifest = Get-PVManifest $edition
         $palette = Get-PVPalette $edition
-        if ($Field -eq 'Preset') {
-            $schemePath = Join-Path $paths.Theme 'termuxvoid-scheme.json'
-            $original = Get-Content -LiteralPath $schemePath -Raw | ConvertFrom-Json
-            foreach ($name in $names) { $palette[$name] = $original.$name.ToUpperInvariant() }
-            if ($Value -eq 'Ocean') {
-                $palette.background = '#071927'; $palette.foreground = '#D9F6FF'; $palette.blue = '#45C5F7'; $palette.cyan = '#64FFDA'; $palette.purple = '#8F9BFF'
-            } elseif ($Value -eq 'Monochrome') {
-                $palette.background = '#151515'; $palette.foreground = '#E6E6E6'; $palette.blue = '#AFAFAF'; $palette.cyan = '#D0D0D0'; $palette.purple = '#C0C0C0'
-            }
-        } else { $palette[$Field] = $Value.ToUpperInvariant() }
+        $palette = Get-PVUpdatedPalette $palette $Field $Value $edition
         if (Test-Path -LiteralPath $paths.Fragment) {
             if (-not $manifest.terminalFragmentHash -or (Get-PVFileHash $paths.Fragment) -ne $manifest.terminalFragmentHash) {
-                throw "Windows Terminal fragment is modified or unowned: $($paths.Fragment). No changes made."
+                throw "Windows Terminal fragment is modified or unowned: $($paths.Fragment). No changes made. Back up your edits and restore the matching owned fragment before retrying."
             }
             $fragment = Get-Content -LiteralPath $paths.Fragment -Raw | ConvertFrom-Json
             if (@($fragment.schemes).Count -ne 1 -or @($fragment.profiles).Count -ne 1) { throw "Unrecognized Terminal fragment: $($paths.Fragment)." }
@@ -238,6 +262,15 @@ function global:Set-PVPalette([string[]]$Editions, [string]$Field, [string]$Valu
     Write-Host 'Terminal colors saved to a separate PowerShell Void profile. Restart Terminal and select that profile.'
 }
 
+function global:Show-PVChoiceStatus([string]$Message, [bool]$Compact) {
+    if ($Compact) {
+        # Keep the status on one line even in a narrow window. The full menu stays above it.
+        $width = [Console]::WindowWidth
+        if ($width -gt 4 -and $Message.Length -ge $width) { $Message = $Message.Substring(0, $width - 4) + '...' }
+        [Console]::Write("`r$([char]27)[2K$Message")
+    } else { Write-Host $Message }
+}
+
 function global:Read-PVChoice([string]$Title, [string[]]$Items) {
     Write-Host "`n=== $Title ==="
     for ($i = 0; $i -lt $Items.Count; $i++) { Write-Host (" {0,2}) {1}" -f ($i + 1), $Items[$i]) }
@@ -249,25 +282,27 @@ function global:Read-PVChoice([string]$Title, [string[]]$Items) {
     }
     $selection = 0
     $digits = ''
+    $compact = [bool]($env:WT_SESSION -and $env:TERM -ne 'dumb')
     Write-Host 'Up/Down + Enter, or type a number + Enter. Esc/0 goes back.'
-    Write-Host ("Selected: {0}" -f $Items[$selection])
+    Show-PVChoiceStatus ("Selected: {0}" -f $Items[$selection]) $compact
     while ($true) {
         $key = [Console]::ReadKey($true)
         switch ($key.Key) {
-            'UpArrow' { $selection = ($selection + $Items.Count - 1) % $Items.Count; $digits = ''; Write-Host ("Selected: {0}" -f $Items[$selection]) }
-            'DownArrow' { $selection = ($selection + 1) % $Items.Count; $digits = ''; Write-Host ("Selected: {0}" -f $Items[$selection]) }
+            'UpArrow' { $selection = ($selection + $Items.Count - 1) % $Items.Count; $digits = ''; Show-PVChoiceStatus ("Selected: {0}" -f $Items[$selection]) $compact }
+            'DownArrow' { $selection = ($selection + 1) % $Items.Count; $digits = ''; Show-PVChoiceStatus ("Selected: {0}" -f $Items[$selection]) $compact }
             'Escape' { Write-Host ''; return -1 }
-            'Backspace' { if ($digits.Length -gt 0) { $digits = $digits.Substring(0, $digits.Length - 1); Write-Host "Number: $digits" } }
+            'Backspace' { if ($digits.Length -gt 0) { $digits = $digits.Substring(0, $digits.Length - 1); Show-PVChoiceStatus "Number: $digits" $compact } }
             'Enter' {
+                if ($compact) { Write-Host '' }
                 if ($digits.Length -eq 0) { return $selection }
                 $number = 0
                 if ([int]::TryParse($digits, [ref]$number) -and $number -ge 1 -and $number -le $Items.Count) { return ($number - 1) }
                 if ($digits -eq '0') { return -1 }
-                $digits = ''; Write-Host 'Invalid choice. Try again.'
+                $digits = ''; Show-PVChoiceStatus 'Invalid choice. Try again.' $compact
             }
             default {
                 if ($key.KeyChar -ge '0' -and $key.KeyChar -le '9' -and $digits.Length -lt 3) {
-                    $digits += $key.KeyChar; Write-Host "Number: $digits"
+                    $digits += $key.KeyChar; Show-PVChoiceStatus "Number: $digits" $compact
                 }
             }
         }
@@ -300,27 +335,66 @@ function global:Get-PVTargets([bool]$Both) {
     return $result
 }
 
+function global:Format-PVValues([string[]]$Editions, $States, [string]$Key) {
+    $parts = @()
+    foreach ($edition in $Editions) {
+        $value = $States[$edition][$Key]
+        if ($value -is [bool]) { $value = if ($value) { 'On' } else { 'Off' } }
+        if ($Editions.Count -gt 1) { $parts += "${edition}: $value" } else { $parts += "$value" }
+    }
+    return ($parts -join ' | ')
+}
+
+function global:Confirm-PVMixedChange([string[]]$Editions, $States, [string]$Key, [bool]$Value) {
+    if ($Editions.Count -lt 2 -or $States[$Editions[0]][$Key] -eq $States[$Editions[1]][$Key]) { return $true }
+    $desired = if ($Value) { 'On' } else { 'Off' }
+    $current = Format-PVValues $Editions $States $Key
+    return ((Read-PVChoice "Values differ ($current). Set $Key to $desired in both editions?" @('No', 'Yes')) -eq 1)
+}
+
+function global:Confirm-PVPalette([string[]]$Editions, [string]$Field, [string]$Value) {
+    if ($Field -ne 'Preset' -and $Value -notmatch '^#[0-9a-fA-F]{6}$') { throw 'Use a color such as #16B1FB.' }
+    $low = $false
+    foreach ($edition in $Editions) {
+        $palette = Get-PVUpdatedPalette (Get-PVPalette $edition) $Field $Value $edition
+        $ratio = Get-PVContrast $palette.foreground $palette.background
+        Write-Host ("{0}: background {1}, foreground {2}, contrast {3:N2}:1" -f $edition, $palette.background, $palette.foreground, $ratio)
+        if ($ratio -lt 4.5) { $low = $true }
+        if ($Field -eq 'Preset') {
+            foreach ($name in (Get-PVColorNames)) { Write-Host ("  {0,-13} {1}" -f $name, $palette[$name]) }
+        }
+    }
+    if ($low) { Write-Warning 'Foreground/background contrast is below 4.5:1 and may be hard to read.' }
+    if ($Field -ne 'Preset' -and -not $low) { Write-Host 'Changes affect a separate PowerShell Void profile. Restart Terminal and select that profile.' }
+    if ($Field -eq 'Preset' -or $low) {
+        Write-Host 'Only the default foreground/background pair is checked; prompt and ANSI colors may differ.'
+        Write-Host 'Changes affect a separate PowerShell Void profile. Restart Terminal and select that profile.'
+        return ((Read-PVChoice "Apply $Value to $($Editions -join ', ')?" @('No', 'Yes')) -eq 1)
+    }
+    return $true
+}
+
 function global:Show-PVAnimations([string[]]$Editions) {
     while ($true) {
-        $state = Get-PVAnimationState $PSVersionTable.PSEdition
-        $choices = @("TTE welcome: $($state.Welcome)", "ascii.rest banner: $($state.Banner)", "Idle showcase: $($state.Idle)", "Idle delay: $($state.IdleSeconds) seconds", 'Preview an animation', 'Back')
+        try {
+            $states = @{}; foreach ($edition in $Editions) { $states[$edition] = Get-PVAnimationState $edition }
+        } catch { Write-Warning $_.Exception.Message; return }
+        $state = $states[$PSVersionTable.PSEdition]
+        $choices = @("TTE welcome: $(Format-PVValues $Editions $states 'Welcome')", "ascii.rest banner: $(Format-PVValues $Editions $states 'Banner')", "Idle showcase: $(Format-PVValues $Editions $states 'Idle')", "Idle delay (seconds): $(Format-PVValues $Editions $states 'IdleSeconds')", 'Preview an animation', 'Back')
         $choice = Read-PVChoice 'Animations' $choices
         if ($choice -lt 0 -or $choice -eq 5) { return }
         try {
-            switch ($choice) {
-                0 { Set-PVAnimationState $Editions 'Welcome' (-not $state.Welcome) }
-                1 { Set-PVAnimationState $Editions 'Banner' (-not $state.Banner) }
-                2 { Set-PVAnimationState $Editions 'Idle' (-not $state.Idle) }
-                3 {
-                    $answer = Read-PVText 'Idle delay in seconds (1-3600; Esc cancels):'
-                    if ($answer) { $number = 0; if (-not [int]::TryParse($answer, [ref]$number)) { throw 'Enter a whole number.' }; Set-PVAnimationState $Editions 'IdleSeconds' $number }
-                }
-                4 {
-                    $preview = Read-PVChoice 'Preview' @('TTE welcome', 'ascii.rest banner', 'Asciimatics showcase', 'Back')
-                    if ($preview -eq 0) { Show-PowerShellVoidAnimation -Engine TTE }
-                    elseif ($preview -eq 1) { Show-PowerShellVoidAnimation -Engine AsciiRest }
-                    elseif ($preview -eq 2) { Show-PowerShellVoidAnimation -Engine Asciimatics }
-                }
+            if ($choice -lt 3) {
+                $key = @('Welcome', 'Banner', 'Idle')[$choice]; $value = -not $state[$key]
+                if (Confirm-PVMixedChange $Editions $states $key $value) { Set-PVAnimationState $Editions $key $value }
+            } elseif ($choice -eq 3) {
+                $answer = Read-PVText 'Idle delay in seconds (1-3600; Esc cancels):'
+                if ($answer) { $number = 0; if (-not [int]::TryParse($answer, [ref]$number)) { throw 'Enter a whole number.' }; Set-PVAnimationState $Editions 'IdleSeconds' $number }
+            } elseif ($choice -eq 4) {
+                $preview = Read-PVChoice 'Preview' @('TTE welcome', 'ascii.rest banner', 'Asciimatics showcase', 'Back')
+                if ($preview -eq 0) { Show-PowerShellVoidAnimation -Engine TTE }
+                elseif ($preview -eq 1) { Show-PowerShellVoidAnimation -Engine AsciiRest }
+                elseif ($preview -eq 2) { Show-PowerShellVoidAnimation -Engine Asciimatics }
             }
         } catch { Write-Warning $_.Exception.Message }
     }
@@ -329,15 +403,18 @@ function global:Show-PVAnimations([string[]]$Editions) {
 function global:Show-PVPrompt([string[]]$Editions) {
     $keys = @('Username', 'Directory', 'Git', 'Languages', 'Duration', 'Time', 'Jobs', 'Status')
     while ($true) {
-        try { $state = Get-PVPromptState $PSVersionTable.PSEdition } catch { Write-Warning $_.Exception.Message; return }
+        try { $states = @{}; foreach ($edition in $Editions) { $states[$edition] = Get-PVPromptState $edition } } catch { Write-Warning $_.Exception.Message; return }
+        $state = $states[$PSVersionTable.PSEdition]
         $choices = @()
-        foreach ($key in $keys) { $choices += "$key : $($state[$key])" }
-        $choices += @("Directory text color: $($state.DirectoryColor)", 'Reapply settings to latest prompt template', 'Back')
+        foreach ($key in $keys) { $choices += "$key : $(Format-PVValues $Editions $states $key)" }
+        $choices += @("Directory text color: $(Format-PVValues $Editions $states 'DirectoryColor')", 'Reapply settings to latest prompt template', 'Back')
         $choice = Read-PVChoice 'Prompt components' $choices
         if ($choice -lt 0 -or $choice -eq 10) { return }
         try {
-            if ($choice -lt $keys.Count) { $key = $keys[$choice]; Set-PVPromptState $Editions $key (-not $state[$key]) }
-            elseif ($choice -eq 8) { $color = Read-PVText 'Directory color (#RRGGBB; Esc cancels):'; if ($color) { Set-PVPromptState $Editions 'DirectoryColor' $color } }
+            if ($choice -lt $keys.Count) {
+                $key = $keys[$choice]; $value = -not $state[$key]
+                if (Confirm-PVMixedChange $Editions $states $key $value) { Set-PVPromptState $Editions $key $value }
+            } elseif ($choice -eq 8) { $color = Read-PVText 'Directory color (#RRGGBB; Esc cancels):'; if ($color) { Set-PVPromptState $Editions 'DirectoryColor' $color } }
             elseif ($choice -eq 9) { Set-PVPromptState $Editions 'Reapply' $null }
         } catch { Write-Warning $_.Exception.Message }
     }
@@ -345,20 +422,24 @@ function global:Show-PVPrompt([string[]]$Editions) {
 
 function global:Show-PVColors([string[]]$Editions) {
     while ($true) {
-        try { $palette = Get-PVPalette $PSVersionTable.PSEdition } catch { Write-Warning $_.Exception.Message; return }
+        try { $palettes = @{}; foreach ($edition in $Editions) { $palettes[$edition] = Get-PVPalette $edition } } catch { Write-Warning $_.Exception.Message; return }
+        $palette = $palettes[$PSVersionTable.PSEdition]
         $choice = Read-PVChoice 'Windows Terminal colors' @('Void preset', 'Ocean preset', 'Monochrome preset', 'Edit one color', 'Show current colors', 'Back')
         if ($choice -lt 0 -or $choice -eq 5) { return }
         try {
-            if ($choice -lt 3) { Set-PVPalette $Editions 'Preset' (@('Void', 'Ocean', 'Monochrome')[$choice]) }
+            if ($choice -lt 3) {
+                $preset = @('Void', 'Ocean', 'Monochrome')[$choice]
+                if (Confirm-PVPalette $Editions 'Preset' $preset) { Set-PVPalette $Editions 'Preset' $preset }
+            }
             elseif ($choice -eq 3) {
                 $names = @(Get-PVColorNames)
-                $items = @($names | ForEach-Object { "$_ : $($palette[$_])" }) + @('Back')
+                $items = @($names | ForEach-Object { "$_ : $(Format-PVValues $Editions $palettes $_)" }) + @('Back')
                 $field = Read-PVChoice 'Choose color' $items
                 if ($field -ge 0 -and $field -lt $names.Count) {
                     $color = Read-PVText "$($names[$field]) (#RRGGBB; Esc cancels):"
-                    if ($color) { Set-PVPalette $Editions $names[$field] $color }
+                    if ($color -and (Confirm-PVPalette $Editions $names[$field] $color)) { Set-PVPalette $Editions $names[$field] $color }
                 }
-            } elseif ($choice -eq 4) { foreach ($name in (Get-PVColorNames)) { Write-Host ("{0,-13} {1}" -f $name, $palette[$name]) } }
+            } elseif ($choice -eq 4) { foreach ($name in (Get-PVColorNames)) { Write-Host ("{0,-13} {1}" -f $name, (Format-PVValues $Editions $palettes $name)) } }
         } catch { Write-Warning $_.Exception.Message }
     }
 }

@@ -36,6 +36,15 @@ try {
             Fragment = (Join-Path $testRoot "LocalAppData\Microsoft\Windows Terminal\Fragments\TermuxVoid-Theme\$Edition.json")
         }
     }
+    Assert ([Math]::Abs((Get-PVContrast '#FFFFFF' '#000000') - 21) -lt 0.001) 'contrast black/white known vector'
+    Assert ([Math]::Abs((Get-PVContrast '#123456' '#123456') - 1) -lt 0.001) 'contrast identical colors known vector'
+    $mono = Get-PVUpdatedPalette (Get-PVPalette $current) 'Preset' 'Monochrome' $current
+    foreach ($name in (Get-PVColorNames)) {
+        $hex = $mono[$name]
+        Assert ($hex.Substring(1, 2) -eq $hex.Substring(3, 2) -and $hex.Substring(3, 2) -eq $hex.Substring(5, 2)) "monochrome $name is grayscale"
+    }
+    $mockStates = @{ Core = @{ Time = $true }; Desktop = @{ Time = $false } }
+    Assert ((Format-PVValues @('Core', 'Desktop') $mockStates 'Time') -eq 'Core: On | Desktop: Off') 'mixed values identify editions'
     Assert ([bool](Get-Command psvoid -ErrorAction SilentlyContinue)) 'manager command registered'
     [string[]]$editions = @(Get-PVTargets $true)
     Assert ($editions.Count -eq 2) 'both installed editions found'

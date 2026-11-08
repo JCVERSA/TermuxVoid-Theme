@@ -104,16 +104,48 @@ Write-Host '[[MENU-READY]]'
             wait_for('=== Choose color ===')
             proc.write('1\r')
             wait_for('background (#RRGGBB; Esc cancels):')
+            proc.write('#F8F8F8\r')
+            wait_for('contrast is below 4.5:1')
+            proc.write('1\r')  # Cancel unreadable colors.
+            wait_for('=== Windows Terminal colors ===', count=2)
+            assert not (base / ('Desktop.json' if shell == 'powershell.exe' else 'Core.json')).exists()
+            proc.write('4\r')
+            wait_for('=== Choose color ===', count=2)
+            proc.write('1\r')
+            wait_for('background (#RRGGBB; Esc cancels):', count=2)
             proc.write('#123456\r')
             wait_for('Terminal colors saved')
+            proc.write('3\r')
+            wait_for('Apply Monochrome to')
+            proc.write('1\r')  # Previewing a preset does not apply it.
+            wait_for('=== Windows Terminal colors ===', count=4)
             proc.write('6\r')
             wait_for('=== PowerShell Void Manager', count=5)
+            # Time now differs: current edition is off, the other remains at its default on.
+            proc.write('5\r')
+            wait_for('=== PowerShell Void Manager', count=6)
+            proc.write('2\r')
+            wait_for('=== Prompt components ===', count=3)
+            proc.write('6\r')
+            wait_for('Values differ (')
+            proc.write('1\r')  # Reject the mixed-target change.
+            wait_for('=== Prompt components ===', count=4)
+            current = 'Desktop' if shell == 'powershell.exe' else 'Core'
+            other = 'Core' if current == 'Desktop' else 'Desktop'
+            assert json.loads((base / f'prompt-settings-{current}.json').read_text())['Time'] is False
+            assert not (base / f'prompt-settings-{other}.json').exists()
+            proc.write('6\r')
+            wait_for('Values differ (', count=2)
+            proc.write('2\r')  # Confirm setting both editions to On.
+            wait_for('Prompt settings saved', count=2)
+            proc.write('11\r')
+            wait_for('=== PowerShell Void Manager', count=7)
             proc.write('6\r')
             proc.write("Write-Host ('MENU' + '-DONE')\r")
             wait_for('MENU-DONE')
             # ConPTY encodes Ctrl+Alt+V as Alt + Ctrl-V.
             proc.write('\x1b\x16')
-            wait_for('=== PowerShell Void Manager', count=6)
+            wait_for('=== PowerShell Void Manager', count=8)
             proc.write('6\r')
             proc.write("Write-Host ('HOTKEY' + '-DONE')\r")
             wait_for('HOTKEY-DONE')
@@ -123,7 +155,9 @@ Write-Host '[[MENU-READY]]'
             edition = 'Desktop' if shell == 'powershell.exe' else 'Core'
             prompt = json.loads((base / f'prompt-settings-{edition}.json').read_text())
             fragment = json.loads((base / f'{edition}.json').read_text())
-            assert prompt['Time'] is False
+            assert prompt['Time'] is True
+            other = 'Core' if edition == 'Desktop' else 'Desktop'
+            assert json.loads((base / f'prompt-settings-{other}.json').read_text())['Time'] is True
             assert fragment['schemes'][0]['background'] == '#123456'
             proc.write('exit\r')
             print(f'PASS: {shell} interactive arrow and numbered manager')
