@@ -93,8 +93,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python ./tests/windows-idle-interactive.test.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python ./tests/windows-manager-interactive.test.py
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Test real Starship rendering
         shell: pwsh
         run: |
@@ -110,3 +108,17 @@ jobs:
             Write-Output "::error::$($_.Exception.Message) at $($_.ScriptStackTrace)"
             exit 1
           }
+  manager_ui:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test interactive manager and shortcut
+        shell: pwsh
+        run: |
+          python -m pip install pywinpty==3.0.3
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python ./tests/windows-manager-interactive.test.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
