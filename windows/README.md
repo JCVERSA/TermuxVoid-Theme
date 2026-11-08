@@ -7,17 +7,20 @@ The Windows version uses Starship for the prompt and keeps its configuration sep
 
 ## Requirements and installation
 
-Use Windows Terminal with Windows PowerShell 5.1 or PowerShell 7. Get a complete copy of this repository, including `windows/starship.toml`. Open the PowerShell profile you want to customize, change directory to the repository, and run:
+Use Windows Terminal with Windows PowerShell 5.1 or PowerShell 7. In the profile you want to customize, run:
 
 ```powershell
-.\windows\termuxvoid.ps1
+& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/JCVERSA/TermuxVoid-Theme/arena/d693b190-termuxvoid-theme/windows/install.ps1')))
 ```
 
+This downloads and runs code from the current development branch. You can [inspect the bootstrap script](install.ps1) and [installer](termuxvoid.ps1) first. The bootstrap downloads those files into a temporary folder and runs setup in a child PowerShell process with a process-only execution-policy bypass; group policies can still prevent execution. It cleans up its temporary files. Run the same command to install or update: existing installations use the guarded update described below.
+
+Alternatively, from a complete repository checkout, run `.\windows\termuxvoid.ps1` for an install or `.\windows\termuxvoid.ps1 -Update` to update.
 If Starship is not already on PATH, the installer uses WinGet to install the per-user portable `Starship.Starship` package. This requires an internet connection and WinGet, accepts the WinGet source and package agreements, and changes the user's installed packages/PATH. A missing WinGet or failed installation stops setup before theme files are changed. If Starship is already on PATH, nothing is downloaded. Restart **Windows Terminal** after setup so it picks up PATH changes; open the same PowerShell profile to see the prompt.
 
 Git is only needed for working with Git repositories and is not installed or upgraded. The prompt works without Git; it shows a branch only inside a repository. The colors and font below are optional visual customization, not required dependencies; the installer does not rewrite Windows Terminal settings or install fonts.
 
-For offline or managed environments, `-SkipDependencyInstall` skips WinGet. The prompt won't initialize until Starship is available on PATH. The managed profile block sets `STARSHIP_CONFIG` in that shell session and initializes Starship. It doesn't overwrite your existing Starship config, but that config isn't used while the block is active. Other prompt customizations may conflict.
+For offline or managed environments, use `-SkipDependencyInstall` with the local installer to skip WinGet. The prompt won't initialize until Starship is available on PATH. The managed profile block sets `STARSHIP_CONFIG` in that shell session and initializes Starship. It doesn't overwrite your existing Starship config, but that config isn't used while the block is active. Other prompt customizations may conflict.
 
 If Windows blocks scripts, inspect the script and execution-policy requirements first. A temporary process-only option is `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`, followed by the command above. This does not override a machine/group policy. Downloaded files may also be marked as coming from the internet.
 
@@ -25,7 +28,7 @@ Windows PowerShell and PowerShell 7 have separate profiles and installations. Ru
 
 ## Update an existing Windows installation
 
-From a **new copy of the repository**, in the same PowerShell edition and host used to install, run:
+Run the quick-install command again in the same PowerShell edition and host used to install. Alternatively, from a **new copy of the repository**, run:
 
 ```powershell
 .\windows\termuxvoid.ps1 -Update

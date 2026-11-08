@@ -20,7 +20,13 @@ A professional terminal customization for Termux that transforms your mobile Lin
 
 ## 🪟 Windows Terminal + PowerShell
 
-For the separate native Windows version, see the [Windows setup and uninstall guide](windows/README.md). The Termux installer below is not intended for Windows.
+In Windows Terminal, open PowerShell and run:
+
+```powershell
+& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/JCVERSA/TermuxVoid-Theme/arena/d693b190-termuxvoid-theme/windows/install.ps1')))
+```
+
+This downloads and executes code from the current development branch. See the [Windows setup and uninstall guide](windows/README.md) for details and a local-install alternative. The Termux installer below is not intended for Windows.
 
 ## 🛠️ Installation
 

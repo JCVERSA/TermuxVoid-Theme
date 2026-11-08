@@ -28,6 +28,20 @@ jobs:
             Write-Output "::error::$($_.Exception.Message) at $($_.ScriptStackTrace)"
             exit 1
           }
+      - name: Test short command on Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          try { ./tests/windows-bootstrap.test.ps1 } catch {
+            Write-Output "::error::$($_.Exception.Message) at $($_.ScriptStackTrace)"
+            exit 1
+          }
+      - name: Test short command on PowerShell 7
+        shell: pwsh
+        run: |
+          try { ./tests/windows-bootstrap.test.ps1 } catch {
+            Write-Output "::error::$($_.Exception.Message) at $($_.ScriptStackTrace)"
+            exit 1
+          }
       - name: Test real Starship rendering
         shell: pwsh
         run: |
