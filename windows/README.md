@@ -58,6 +58,22 @@ Use **Switch target** to apply configuration changes to both installed PowerShel
 
 Prompt customization creates a separate user-owned prompt file and never edits the installed Starship template. The manager refuses to overwrite a modified generated prompt or an edited/unowned Terminal fragment; back up and resolve conflicts manually. Changes create backups under `~\.config\TermuxVoid-Windows\backups`. To reset an invalid animation settings file, back it up and move it aside before reopening the menu. For an edited generated prompt, back up and restore its matching prompt/settings pair, or move both aside to reset prompt choices. Restore a matching owned Terminal fragment to resolve a fragment conflict; do not discard your edits without a backup. Prompt choices are retained on update; if the underlying template changed, open **Prompt components → Reapply** to pick up the updated template. Custom prompt files and settings are retained on uninstall. A manager-customized Terminal profile and its color metadata are backed up before its fragment is removed.
 
+## Command-history suggestions
+
+PowerShell Void enables inline suggestions from PSReadLine history by default. Run a command such as `clear` once, then begin typing it again; press **Right Arrow** to accept a displayed suggestion, then **Enter** to run it. Suggestions depend on matching history and may not appear for every prefix. Your current PSReadLine keybindings are not changed; a custom Right Arrow binding may work differently.
+
+In `psvoid`, choose **History suggestions** to switch history predictions on or off, including for both installed editions. Off removes the history prediction source but leaves any predictor plugins enabled; turning it on selects inline view and adds history without disabling plugins. Other open shells must be restarted. This setting is retained on uninstall, but uninstall stops PowerShell Void from applying it in new sessions.
+
+PSReadLine normally stores its own history across sessions; PowerShell Void does not create, copy or clear history files or override your history-save policy. If your policy disables history saving, suggestions won't persist between sessions. History can contain sensitive information, so avoid entering secrets directly in commands. PowerShell editions or hosts may use different history files.
+
+Suggestions require PSReadLine 2.1 or newer and a compatible terminal. If needed, normal installation/update attempts to install PSReadLine 2.3.6 from PowerShell Gallery for the current user; it does not upgrade an already compatible version. The module is retained on uninstall. If setup cannot install it, or if you used `-SkipDependencyInstall`, install it manually and restart PowerShell:
+
+```powershell
+Install-Module PSReadLine -RequiredVersion 2.3.6 -Scope CurrentUser -Repository PSGallery -AllowClobber -Force
+```
+
+An older already-loaded version may require closing all PowerShell windows before restarting. Plugin and profile settings applied later can override PowerShell Void's selection.
+
 ## Animations
 
 The installer automatically sets up all three animation engines. In interactive Windows Terminal sessions the TTE welcome and ascii.rest banner play at startup; Asciimatics shows a full-screen starfield after **five seconds** of inactivity at an empty PowerShell prompt. It stops on keyboard or mouse activity, without intentionally consuming the key. It does not run while a command or interactive application is running, or while a command line contains text. It requires PSReadLine and Windows' session-wide last-input detection, so activity in other applications can delay or dismiss it. The display is not guaranteed to be limited to the active Windows Terminal tab. Very old PSReadLine versions or other event handlers may prevent idle detection. No packages are downloaded at shell startup.

@@ -45,7 +45,7 @@ function global:Get-PVPaths([string]$Edition) {{
     return @{{
         Base = $base; Theme = $theme; Manifest = Join-Path $theme 'manifest.json'
         Prompt = Join-Path $base "prompt-$Edition.toml"; PromptSettings = Join-Path $base "prompt-settings-$Edition.json"
-        AnimationSettings = Join-Path $base "animation-settings-$Edition.json"; Fragment = Join-Path $base "$Edition.json"
+        AnimationSettings = Join-Path $base "animation-settings-$Edition.json"; SuggestionSettings = Join-Path $base "suggestion-settings-$Edition.json"; Fragment = Join-Path $base "$Edition.json"
     }}
 }}
 Write-Host '[[MENU-READY]]'
@@ -141,12 +141,24 @@ Write-Host '[[MENU-READY]]'
             proc.write('11\r')
             wait_for('=== PowerShell Void Manager', count=7)
             proc.write('6\r')
+            wait_for('=== History suggestions ===')
+            proc.write('1\r')
+            wait_for('History suggestion preference saved')
+            for target in ('Core', 'Desktop'):
+                assert json.loads((base / f'suggestion-settings-{target}.json').read_text())['Enabled'] is False
+            proc.write('1\r')
+            wait_for('History suggestion preference saved', count=2)
+            for target in ('Core', 'Desktop'):
+                assert json.loads((base / f'suggestion-settings-{target}.json').read_text())['Enabled'] is True
+            proc.write('2\r')
+            wait_for('=== PowerShell Void Manager', count=8)
+            proc.write('7\r')
             proc.write("Write-Host ('MENU' + '-DONE')\r")
             wait_for('MENU-DONE')
             # ConPTY encodes Ctrl+Alt+V as Alt + Ctrl-V.
             proc.write('\x1b\x16')
-            wait_for('=== PowerShell Void Manager', count=8)
-            proc.write('6\r')
+            wait_for('=== PowerShell Void Manager', count=9)
+            proc.write('7\r')
             proc.write("Write-Host ('HOTKEY' + '-DONE')\r")
             wait_for('HOTKEY-DONE')
             setting = base / ('animation-settings-Desktop.json' if shell == 'powershell.exe' else 'animation-settings-Core.json')
@@ -163,11 +175,11 @@ Write-Host '[[MENU-READY]]'
             proc.write(f"[IO.File]::WriteAllText({quote(setting)}, '{{invalid'); Write-Host '[[BROKEN-SETTINGS]]'\r")
             wait_for('[[BROKEN-SETTINGS]]')
             proc.write("$env:POWERSHELLVOID_PLAIN_MENU = '1'; psvoid\r")
-            wait_for('=== PowerShell Void Manager', count=9)
+            wait_for('=== PowerShell Void Manager', count=10)
             proc.write('1\r')
             wait_for('correct this JSON')
-            wait_for('=== PowerShell Void Manager', count=10)
-            proc.write('6\r')
+            wait_for('=== PowerShell Void Manager', count=11)
+            proc.write('7\r')
             proc.write("Write-Host ('RECOVERY' + '-DONE')\r")
             wait_for('RECOVERY-DONE')
             proc.write('exit\r')

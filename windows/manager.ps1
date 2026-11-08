@@ -1,6 +1,6 @@
 # PowerShell Void manager. Installer-owned templates remain unchanged.
 # Functions use a distinct namespace to avoid interfering with the user's profile.
-if (@('Invoke-PowerShellVoidManager', 'Get-PVPaths', 'Get-PVManifest', 'Get-PVFileHash', 'Assert-PVOwnedFile', 'Backup-PVFiles', 'Read-PVChoice', 'Read-PVText', 'Get-PVPromptState', 'Set-PVPromptState', 'Get-PVAnimationState', 'Set-PVAnimationState', 'Get-PVColorNames', 'Get-PVPalette', 'Get-PVUpdatedPalette', 'Get-PVContrast', 'Show-PVChoiceStatus', 'Format-PVValues', 'Confirm-PVMixedChange', 'Confirm-PVPalette', 'Set-PVPalette', 'Get-PVTargets', 'Show-PVAnimations', 'Show-PVPrompt', 'Show-PVColors', 'Show-PVMaintenance', 'Start-PVShortcut' | Where-Object {
+if (@('Invoke-PowerShellVoidManager', 'Get-PVPaths', 'Get-PVManifest', 'Get-PVFileHash', 'Assert-PVOwnedFile', 'Backup-PVFiles', 'Read-PVChoice', 'Read-PVText', 'Get-PVPromptState', 'Set-PVPromptState', 'Get-PVAnimationState', 'Set-PVAnimationState', 'Get-PVColorNames', 'Get-PVPalette', 'Get-PVUpdatedPalette', 'Get-PVContrast', 'Show-PVChoiceStatus', 'Format-PVValues', 'Confirm-PVMixedChange', 'Confirm-PVPalette', 'Set-PVPalette', 'Get-PVSuggestionState', 'Set-PVSuggestionState', 'Apply-PVSuggestions', 'Show-PVSuggestions', 'Get-PVTargets', 'Show-PVAnimations', 'Show-PVPrompt', 'Show-PVColors', 'Show-PVMaintenance', 'Start-PVShortcut' | Where-Object {
     Get-Command $_ -ErrorAction SilentlyContinue
 }).Count -gt 0) { return }
 
@@ -10,7 +10,7 @@ function global:Get-PVPaths([string]$Edition) {
     $fragment = if ($env:LOCALAPPDATA) { Join-Path $env:LOCALAPPDATA ("Microsoft\Windows Terminal\Fragments\TermuxVoid-Theme\$Edition.json") } else { $null }
     return @{ Base = $base; Theme = $theme; Manifest = (Join-Path $theme 'manifest.json');
         Prompt = (Join-Path $base "prompt-$Edition.toml"); PromptSettings = (Join-Path $base "prompt-settings-$Edition.json");
-        AnimationSettings = (Join-Path $base "animation-settings-$Edition.json"); Fragment = $fragment }
+        AnimationSettings = (Join-Path $base "animation-settings-$Edition.json"); SuggestionSettings = (Join-Path $base "suggestion-settings-$Edition.json"); Fragment = $fragment }
 }
 
 function global:Get-PVManifest([string]$Edition) {
@@ -325,6 +325,68 @@ function global:Read-PVText([string]$Label) {
     }
 }
 
+function global:Get-PVSuggestionState([string]$Edition) {
+    $path = (Get-PVPaths $Edition).SuggestionSettings
+    if (-not (Test-Path -LiteralPath $path)) { return @{ Enabled = $true } }
+    try {
+        $saved = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+        if ($saved.Enabled -isnot [bool]) { throw 'Invalid Enabled value' }
+        return @{ Enabled = $saved.Enabled }
+    } catch { throw "Invalid history suggestion settings: $path. Back up and correct the file, or move it aside to restore defaults." }
+}
+
+function global:Apply-PVSuggestions([bool]$Enabled) {
+    if ([Console]::IsInputRedirected -or [Console]::IsOutputRedirected -or $env:TERM -eq 'dumb') { return }
+    try {
+        if (-not (Get-Module PSReadLine)) { Import-Module PSReadLine -ErrorAction Stop }
+        $command = Get-Command Set-PSReadLineOption -ErrorAction Stop
+        if (-not $command.Parameters.ContainsKey('PredictionSource') -or -not $command.Parameters.ContainsKey('PredictionViewStyle')) {
+            if ($Enabled) { Write-Warning 'History suggestions need PSReadLine 2.1 or newer. Update PowerShell Void or install PSReadLine 2.3.6 for the current user, then restart PowerShell.' }
+            return
+        }
+        $options = Get-PSReadLineOption
+        $source = [string]$options.PredictionSource
+        if ($Enabled) {
+            $newSource = switch ($source) { 'None' { 'History' } 'Plugin' { 'HistoryAndPlugin' } default { $source } }
+            Set-PSReadLineOption -PredictionSource $newSource -PredictionViewStyle InlineView -ErrorAction Stop
+            if ([string]$options.HistorySaveStyle -eq 'SaveNothing') { Write-Warning 'PSReadLine history saving is disabled in your settings; suggestions will not persist between sessions.' }
+        } else {
+            $newSource = switch ($source) { 'History' { 'None' } 'HistoryAndPlugin' { 'Plugin' } default { $source } }
+            Set-PSReadLineOption -PredictionSource $newSource -ErrorAction Stop
+        }
+    } catch { Write-Warning "Could not configure history suggestions: $($_.Exception.Message)" }
+}
+
+function global:Set-PVSuggestionState([string[]]$Editions, [bool]$Enabled) {
+    $plans = @()
+    foreach ($edition in $Editions) {
+        $paths = Get-PVPaths $edition
+        $manifest = Get-PVManifest $edition
+        Assert-PVOwnedFile $manifest (Join-Path $paths.Theme 'manager.ps1') 'manager.ps1'
+        $null = Get-PVSuggestionState $edition
+        $plans += $paths
+    }
+    foreach ($paths in $plans) {
+        Backup-PVFiles $paths.Base @($paths.SuggestionSettings)
+        [System.IO.File]::WriteAllText($paths.SuggestionSettings, (@{ Enabled = $Enabled } | ConvertTo-Json), [System.Text.UTF8Encoding]::new($false))
+    }
+    if ($Editions -contains $PSVersionTable.PSEdition) { Apply-PVSuggestions $Enabled }
+    Write-Host 'History suggestion preference saved. Other open shells must be restarted.'
+}
+
+function global:Show-PVSuggestions([string[]]$Editions) {
+    while ($true) {
+        try { $states = @{}; foreach ($edition in $Editions) { $states[$edition] = Get-PVSuggestionState $edition } } catch { Write-Warning $_.Exception.Message; return }
+        $state = $states[$PSVersionTable.PSEdition]
+        $choice = Read-PVChoice 'History suggestions' @("History suggestions: $(Format-PVValues $Editions $states 'Enabled')", 'Back')
+        if ($choice -lt 0 -or $choice -eq 1) { return }
+        try {
+            $value = -not $state.Enabled
+            if (Confirm-PVMixedChange $Editions $states 'Enabled' $value) { Set-PVSuggestionState $Editions $value }
+        } catch { Write-Warning $_.Exception.Message }
+    }
+}
+
 function global:Get-PVTargets([bool]$Both) {
     $current = $PSVersionTable.PSEdition
     $result = @($current)
@@ -494,14 +556,15 @@ function global:Invoke-PowerShellVoidManager {
         while ($true) {
             $targets = @(Get-PVTargets $both)
             $scope = $targets -join ', '
-            $choice = Read-PVChoice "PowerShell Void Manager | Target: $scope" @('Animations', 'Prompt components', 'Windows Terminal colors', 'Status and maintenance', "Switch target (current/both): $scope", 'Exit')
-            if ($choice -lt 0 -or $choice -eq 5) { return }
+            $choice = Read-PVChoice "PowerShell Void Manager | Target: $scope" @('Animations', 'Prompt components', 'Windows Terminal colors', 'Status and maintenance', "Switch target (current/both): $scope", 'History suggestions', 'Exit')
+            if ($choice -lt 0 -or $choice -eq 6) { return }
             switch ($choice) {
                 0 { Show-PVAnimations $targets }
                 1 { Show-PVPrompt $targets }
                 2 { Show-PVColors $targets }
                 3 { Show-PVMaintenance }
                 4 { $both = -not $both; if ($both -and $targets.Count -eq 1 -and @(Get-PVTargets $true).Count -eq 1) { Write-Host 'Only the current edition is installed.' } }
+                5 { Show-PVSuggestions $targets }
             }
         }
     } finally { $global:PowerShellVoidMenuActive = $false }
@@ -539,4 +602,6 @@ if (-not (Get-Command psvoid -ErrorAction SilentlyContinue)) {
         } catch { Write-Warning $_.Exception.Message }
     }
     Start-PVShortcut
+    try { $suggestions = Get-PVSuggestionState $PSVersionTable.PSEdition; Apply-PVSuggestions $suggestions.Enabled }
+    catch { Write-Warning $_.Exception.Message }
 }

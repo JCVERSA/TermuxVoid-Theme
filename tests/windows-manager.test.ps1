@@ -33,6 +33,7 @@ try {
             Base = $base; Theme = $theme; Manifest = (Join-Path $theme 'manifest.json')
             Prompt = (Join-Path $base "prompt-$Edition.toml"); PromptSettings = (Join-Path $base "prompt-settings-$Edition.json")
             AnimationSettings = (Join-Path $base "animation-settings-$Edition.json")
+            SuggestionSettings = (Join-Path $base "suggestion-settings-$Edition.json")
             Fragment = (Join-Path $testRoot "LocalAppData\Microsoft\Windows Terminal\Fragments\TermuxVoid-Theme\$Edition.json")
         }
     }
@@ -48,6 +49,12 @@ try {
     Assert ([bool](Get-Command psvoid -ErrorAction SilentlyContinue)) 'manager command registered'
     [string[]]$editions = @(Get-PVTargets $true)
     Assert ($editions.Count -eq 2) 'both installed editions found'
+    foreach ($edition in $editions) { Assert ((Get-PVSuggestionState $edition).Enabled) 'history suggestions default on' }
+    Set-PVSuggestionState $editions $false
+    foreach ($edition in $editions) { Assert (-not (Get-PVSuggestionState $edition).Enabled) 'history suggestions disabled for both editions' }
+    Set-PVSuggestionState $editions $true
+    foreach ($edition in $editions) { Assert ((Get-PVSuggestionState $edition).Enabled) 'history suggestions enabled for both editions' }
+
     Set-PVAnimationState $editions 'Idle' $false
     Set-PVAnimationState $editions 'IdleSeconds' 15
     $otherManager = Join-Path (Join-Path $base $other) 'manager.ps1'

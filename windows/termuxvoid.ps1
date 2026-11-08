@@ -13,7 +13,8 @@ param(
     # Test-only paths. The generated profile is intended for the real user's HOME.
     [Parameter(DontShow)] [string]$TestHome,
     [Parameter(DontShow)] [string]$TestProfile,
-    [Parameter(DontShow)] [switch]$TestRunAnimationSetup
+    [Parameter(DontShow)] [switch]$TestRunAnimationSetup,
+    [Parameter(DontShow)] [switch]$TestRunSuggestionSetup
 )
 
 $ErrorActionPreference = 'Stop'
@@ -318,6 +319,21 @@ if (-not (Get-Command starship -CommandType Application -ErrorAction SilentlyCon
         if (-not (Get-Command starship -CommandType Application -ErrorAction SilentlyContinue)) {
             Write-Warning 'Starship is not yet on this session PATH. Restart Windows Terminal after installation to refresh PATH.'
         }
+    }
+}
+
+# PSReadLine owns command history; install a compatible version only if needed.
+# This happens during setup, never during profile startup. It affects the current
+# user's PowerShell modules and is retained on uninstall.
+if (-not $SkipDependencyInstall -and (-not $TestHome -or $TestRunSuggestionSetup)) {
+    try {
+        $compatible = @(Get-Module -ListAvailable PSReadLine | Where-Object { $_.Version -ge [version]'2.1.0' })
+        if ($compatible.Count -eq 0) {
+            Write-Host 'Installing PSReadLine 2.3.6 for history suggestions (current user, PowerShell Gallery)...'
+            Install-Module -Name PSReadLine -RequiredVersion '2.3.6' -Scope CurrentUser -Repository PSGallery -AllowClobber -Force -ErrorAction Stop
+        }
+    } catch {
+        Write-Warning "Could not install PSReadLine for history suggestions: $($_.Exception.Message). Install PSReadLine 2.3.6 for the current user and restart PowerShell. Theme setup will continue."
     }
 }
 
