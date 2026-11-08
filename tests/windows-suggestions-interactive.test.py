@@ -1,5 +1,6 @@
 """Test real PSReadLine inline predictions and history persistence via ConPTY."""
 from pathlib import Path
+import os
 import queue
 import re
 import tempfile
@@ -16,7 +17,10 @@ def quote(value):
 
 
 def session(shell, setup, first):
-    proc = PtyProcess.spawn([shell, '-NoProfile', '-NoLogo', '-NoExit', '-File', str(setup)], dimensions=(30, 120))
+    env = os.environ.copy()
+    if shell == 'powershell.exe':
+        env['PSModulePath'] = env['PV_PS5_MODULE_DIR'] + ';' + env.get('PSModulePath', '')
+    proc = PtyProcess.spawn([shell, '-NoProfile', '-NoLogo', '-NoExit', '-File', str(setup)], env=env, dimensions=(30, 120))
     chunks = queue.Queue()
     output = []
 
@@ -67,10 +71,8 @@ def run(shell):
 $ErrorActionPreference = 'Stop'
 $env:WT_SESSION = 'test'
 $env:TERMUXVOID_NO_ANIMATION = '1'
-if ($PSVersionTable.PSEdition -eq 'Desktop') {{
-    $env:PSModulePath = (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\\Modules') + ';' + $env:PSModulePath
-}}
-Import-Module PSReadLine -MinimumVersion 2.1.0 -ErrorAction Stop
+if (-not (Get-Module PSReadLine)) {{ Import-Module PSReadLine -MinimumVersion 2.1.0 -ErrorAction Stop }}
+if ((Get-Module PSReadLine).Version -lt [version]'2.1.0') {{ throw 'Predictive PSReadLine was not loaded at startup.' }}
 Set-PSReadLineOption -HistorySavePath {quote(history)} -HistorySaveStyle SaveIncrementally -PredictionSource None
 $binding = (Get-PSReadLineKeyHandler -Chord 'RightArrow').Function
 . {quote(ROOT / 'windows/manager.ps1')}

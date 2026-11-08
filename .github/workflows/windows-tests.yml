@@ -136,7 +136,9 @@ jobs:
           python-version: '3.11'
       - name: Install predictive PSReadLine for Windows PowerShell 5.1
         shell: powershell
-        run: Install-Module PSReadLine -RequiredVersion 2.3.6 -Scope CurrentUser -Repository PSGallery -AllowClobber -Force
+        run: |
+          Install-Module PSReadLine -RequiredVersion 2.3.6 -Scope CurrentUser -Repository PSGallery -AllowClobber -Force
+          "PV_PS5_MODULE_DIR=$(Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules')" >> $env:GITHUB_ENV
       - name: Test interactive manager and shortcut
         shell: pwsh
         run: |
