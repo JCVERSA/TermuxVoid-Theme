@@ -28,3 +28,17 @@ jobs:
             Write-Output "::error::$($_.Exception.Message) at $($_.ScriptStackTrace)"
             exit 1
           }
+      - name: Test real Starship rendering
+        shell: pwsh
+        run: |
+          try {
+            $zip = Join-Path $env:RUNNER_TEMP 'starship-test.zip'
+            Invoke-WebRequest -Uri 'https://github.com/starship/starship/releases/download/v1.24.1/starship-x86_64-pc-windows-msvc.zip' -OutFile $zip
+            if ((Get-FileHash $zip -Algorithm SHA256).Hash -ne '3D0ED9A2EFC07FCA7560D22AC622473D0B7317CDA6A792842F625CB9FE58C7BC') { throw 'Starship archive hash mismatch' }
+            $dir = Join-Path $env:RUNNER_TEMP 'starship-test'
+            Expand-Archive $zip -DestinationPath $dir
+            ./tests/starship-render.test.ps1 -Starship (Join-Path $dir 'starship.exe')
+          } catch {
+            Write-Output "::error::$($_.Exception.Message) at $($_.ScriptStackTrace)"
+            exit 1
+          }
