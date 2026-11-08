@@ -52,6 +52,17 @@ Remove-Variable termuxVoidConfig -ErrorAction SilentlyContinue
 '@
 $block = "`r`n" + (($block -split "`r?`n") -join "`r`n") + "`r`n"
 
+$animationStart = '# >>> TermuxVoid Animations >>>'
+$animationEnd = '# <<< TermuxVoid Animations <<<'
+$animationBlock = @'
+# >>> TermuxVoid Animations >>>
+$termuxVoidAnimation = Join-Path $HOME ('.config\TermuxVoid-Windows\' + $PSVersionTable.PSEdition + '\animation.ps1')
+if (Test-Path -LiteralPath $termuxVoidAnimation) { . $termuxVoidAnimation }
+Remove-Variable termuxVoidAnimation -ErrorAction SilentlyContinue
+# <<< TermuxVoid Animations <<<
+'@
+$animationBlock = "`r`n" + (($animationBlock -split "`r?`n") -join "`r`n") + "`r`n"
+
 function Get-ProfileEncoding([byte[]]$Bytes) {
     # BOMs are inspected before UTF-16 because UTF-32 LE starts with the same bytes.
     if ($Bytes.Length -ge 4 -and $Bytes[0] -eq 0xff -and $Bytes[1] -eq 0xfe -and $Bytes[2] -eq 0 -and $Bytes[3] -eq 0) { return [System.Text.Encoding]::UTF32 }
@@ -136,6 +147,15 @@ $starts = Find-Bytes $profileBytes ($encoding.GetBytes($startMarker))
 $ends = Find-Bytes $profileBytes ($encoding.GetBytes($endMarker))
 $blocks = Find-Bytes $profileBytes $blockBytes
 
+[byte[]]$animationBlockBytes = $encoding.GetBytes($animationBlock)
+$animationStarts = Find-Bytes $profileBytes ($encoding.GetBytes($animationStart))
+$animationEnds = Find-Bytes $profileBytes ($encoding.GetBytes($animationEnd))
+$animationBlocks = Find-Bytes $profileBytes $animationBlockBytes
+if (($animationStarts.Count -ne 0 -or $animationEnds.Count -ne 0) -and
+    ($animationStarts.Count -ne 1 -or $animationEnds.Count -ne 1 -or $animationBlocks.Count -ne 1)) {
+    throw 'The animation profile block was edited or duplicated. Resolve it manually before continuing. No changes made.'
+}
+
 if ($Uninstall) {
     $manifest = $null
     if (Test-Path -LiteralPath $manifestPath -PathType Leaf) {
@@ -147,20 +167,26 @@ if ($Uninstall) {
     } elseif (Test-Path -LiteralPath $themeDir) {
         throw "No installation manifest found in $themeDir. No changes made."
     }
-    if ($starts.Count -ne 0 -or $ends.Count -ne 0) {
-        if ($starts.Count -ne 1 -or $ends.Count -ne 1 -or $blocks.Count -ne 1) {
-            throw 'The managed profile block has been edited or duplicated. Remove it manually, then rerun uninstall. No changes made.'
-        }
+    if (($starts.Count -ne 0 -or $ends.Count -ne 0) -and
+        ($starts.Count -ne 1 -or $ends.Count -ne 1 -or $blocks.Count -ne 1)) {
+        throw 'The managed profile block has been edited or duplicated. Remove it manually, then rerun uninstall. No changes made.'
+    }
+    $removals = @()
+    if ($blocks.Count -eq 1) { $removals += @{ Offset = $blocks[0]; Length = $blockBytes.Length } }
+    if ($animationBlocks.Count -eq 1) { $removals += @{ Offset = $animationBlocks[0]; Length = $animationBlockBytes.Length } }
+    if ($removals.Count -gt 0) {
         Backup-Profile
-        $offset = $blocks[0]
-        $result = [byte[]]::new($profileBytes.Length - $blockBytes.Length)
-        [Array]::Copy($profileBytes, 0, $result, 0, $offset)
-        $tail = $profileBytes.Length - $offset - $blockBytes.Length
-        [Array]::Copy($profileBytes, $offset + $blockBytes.Length, $result, $offset, $tail)
-        [System.IO.File]::WriteAllBytes($profilePath, $result)
-        Write-Host "Removed managed block from $profilePath"
+        foreach ($item in ($removals | Sort-Object Offset -Descending)) {
+            $result = [byte[]]::new($profileBytes.Length - $item.Length)
+            [Array]::Copy($profileBytes, 0, $result, 0, $item.Offset)
+            $tail = $profileBytes.Length - $item.Offset - $item.Length
+            [Array]::Copy($profileBytes, $item.Offset + $item.Length, $result, $item.Offset, $tail)
+            $profileBytes = $result
+        }
+        [System.IO.File]::WriteAllBytes($profilePath, $profileBytes)
+        Write-Host "Removed managed blocks from $profilePath"
     } else {
-        Write-Host 'No managed profile block found in this host profile.'
+        Write-Host 'No managed profile blocks found in this host profile.'
     }
 
     if ($null -ne $manifest) {
@@ -175,7 +201,7 @@ if ($Uninstall) {
             Write-Warning 'LOCALAPPDATA is unavailable; the Windows Terminal fragment was retained.'
         }
         # Only known files whose contents still match the manifest are deleted.
-        foreach ($file in @('starship.toml', 'termuxvoid.ps1')) {
+        foreach ($file in @('starship.toml', 'termuxvoid.ps1', 'animation.ps1', 'animation-demo.py')) {
             $path = Join-Path $themeDir $file
             if (Test-Path -LiteralPath $path -PathType Leaf) {
                 $expected = $manifest.hashes.$file
@@ -200,9 +226,13 @@ if ($Uninstall) {
 }
 
 $sourceConfig = Join-Path $PSScriptRoot 'starship.toml'
+$sourceAnimation = Join-Path $PSScriptRoot 'animation.ps1'
+$sourceDemo = Join-Path $PSScriptRoot 'animation-demo.py'
 if (-not (Test-Path -LiteralPath $sourceConfig -PathType Leaf)) {
     throw 'The Windows Starship template is missing. Run the installer from a complete checkout or extracted archive.'
 }
+
+if (-not (Test-Path -LiteralPath $sourceAnimation -PathType Leaf) -or -not (Test-Path -LiteralPath $sourceDemo -PathType Leaf)) { throw 'Animation files are missing from the installer source.' }
 
 if ($Update) {
     if ($starts.Count -ne 1 -or $ends.Count -ne 1 -or $blocks.Count -ne 1) {
@@ -223,8 +253,16 @@ if ($Update) {
             throw "Installed file is missing or modified: $path. Back up your changes and resolve this before updating. No changes made."
         }
     }
+    foreach ($file in @('animation.ps1', 'animation-demo.py')) {
+        $path = Join-Path $themeDir $file
+        $expected = $oldManifest.hashes.$file
+        if ($expected -and (-not (Test-Path -LiteralPath $path -PathType Leaf) -or (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $expected)) {
+            throw "Installed animation file is missing or modified: $path. No changes made."
+        }
+        if (-not $expected -and (Test-Path -LiteralPath $path)) { throw "Unowned animation file exists: $path. No changes made." }
+    }
 } else {
-    if ($starts.Count -ne 0 -or $ends.Count -ne 0) {
+    if ($starts.Count -ne 0 -or $ends.Count -ne 0 -or $animationStarts.Count -ne 0 -or $animationEnds.Count -ne 0) {
         throw 'TermuxVoid markers already exist in this profile. Use -Update or resolve them before installing.'
     }
     if (Test-Path -LiteralPath $themeDir) {
@@ -256,21 +294,36 @@ if ($Update) {
     foreach ($file in @('starship.toml', 'termuxvoid.ps1', 'manifest.json')) {
         Copy-Item -LiteralPath (Join-Path $themeDir $file) -Destination (Join-Path $backupDir $file)
     }
+    foreach ($file in @('animation.ps1', 'animation-demo.py')) {
+        $path = Join-Path $themeDir $file
+        if (Test-Path -LiteralPath $path -PathType Leaf) { Copy-Item -LiteralPath $path -Destination (Join-Path $backupDir $file) }
+    }
+    if ($animationBlocks.Count -eq 0) { Backup-Profile }
     Write-Host "Previous installation backed up to $backupDir"
     try {
         Copy-Item -LiteralPath $sourceConfig -Destination $configPath -Force
         Copy-Item -LiteralPath $PSCommandPath -Destination $installedScript -Force
+        Copy-Item -LiteralPath $sourceAnimation -Destination (Join-Path $themeDir 'animation.ps1') -Force
+        Copy-Item -LiteralPath $sourceDemo -Destination (Join-Path $themeDir 'animation-demo.py') -Force
         $manifest = @{
             profilePath = $profilePath
             hashes = @{
                 'starship.toml' = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash
                 'termuxvoid.ps1' = (Get-FileHash -LiteralPath $installedScript -Algorithm SHA256).Hash
+                'animation.ps1' = (Get-FileHash -LiteralPath (Join-Path $themeDir 'animation.ps1') -Algorithm SHA256).Hash
+                'animation-demo.py' = (Get-FileHash -LiteralPath (Join-Path $themeDir 'animation-demo.py') -Algorithm SHA256).Hash
             }
         }
         if ($oldManifest.terminalFragmentHash) { $manifest.terminalFragmentHash = $oldManifest.terminalFragmentHash }
         [System.IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json), [System.Text.UTF8Encoding]::new($false))
+        if ($animationBlocks.Count -eq 0) {
+            $combined = [byte[]]::new($profileBytes.Length + $animationBlockBytes.Length)
+            [Array]::Copy($profileBytes, 0, $combined, 0, $profileBytes.Length)
+            [Array]::Copy($animationBlockBytes, 0, $combined, $profileBytes.Length, $animationBlockBytes.Length)
+            [System.IO.File]::WriteAllBytes($profilePath, $combined)
+        }
     } catch {
-        Write-Warning "Update failed. Restore the three files from $backupDir before retrying."
+        Write-Warning "Update failed. Restore the files from $backupDir and check the printed profile backup before retrying."
         throw
     }
     if (Should-CreateTerminalProfile $oldManifest.terminalFragmentHash) {
@@ -287,17 +340,22 @@ New-Item -ItemType Directory -Path $themeDir -Force | Out-Null
 try {
     Copy-Item -LiteralPath $sourceConfig -Destination $configPath
     Copy-Item -LiteralPath $PSCommandPath -Destination $installedScript
+    Copy-Item -LiteralPath $sourceAnimation -Destination (Join-Path $themeDir 'animation.ps1')
+    Copy-Item -LiteralPath $sourceDemo -Destination (Join-Path $themeDir 'animation-demo.py')
     $manifest = @{
         profilePath = $profilePath
         hashes = @{
             'starship.toml' = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash
             'termuxvoid.ps1' = (Get-FileHash -LiteralPath $installedScript -Algorithm SHA256).Hash
+            'animation.ps1' = (Get-FileHash -LiteralPath (Join-Path $themeDir 'animation.ps1') -Algorithm SHA256).Hash
+            'animation-demo.py' = (Get-FileHash -LiteralPath (Join-Path $themeDir 'animation-demo.py') -Algorithm SHA256).Hash
         }
     }
     [System.IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json), [System.Text.UTF8Encoding]::new($false))
-    $combined = [byte[]]::new($profileBytes.Length + $blockBytes.Length)
+    $combined = [byte[]]::new($profileBytes.Length + $blockBytes.Length + $animationBlockBytes.Length)
     [Array]::Copy($profileBytes, 0, $combined, 0, $profileBytes.Length)
     [Array]::Copy($blockBytes, 0, $combined, $profileBytes.Length, $blockBytes.Length)
+    [Array]::Copy($animationBlockBytes, 0, $combined, $profileBytes.Length + $blockBytes.Length, $animationBlockBytes.Length)
     [System.IO.File]::WriteAllBytes($profilePath, $combined)
 } catch {
     Write-Warning "Installation failed. Check the profile and backup before retrying; installation files may remain in $themeDir."

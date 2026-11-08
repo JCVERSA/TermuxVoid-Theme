@@ -34,7 +34,7 @@ Run the quick-install command again in the same PowerShell edition and host used
 .\windows\termuxvoid.ps1 -Update
 ```
 
-This supports the earlier TermuxVoid Windows installer. It checks the installed files against their manifest, backs them up, replaces the theme and installer, and leaves the profile unchanged. If you edited an installed file or the managed profile block, the update stops rather than overwriting your changes. Save your customizations and resolve the conflict manually before retrying. If an update fails midway, restore `starship.toml`, `termuxvoid.ps1`, and `manifest.json` from the printed backup directory.
+This supports the earlier TermuxVoid Windows installer. It checks installed files against their manifest, backs them up, replaces the theme and installer, and appends a separately marked animation helper block to older profiles. Subsequent updates leave that block unchanged. If you edited an installed file or the managed profile block, the update stops rather than overwriting your changes. Save your customizations and resolve the conflict manually before retrying. If an update fails midway, restore the backed-up files from the printed update directory and, if the profile changed, the separately printed profile backup.
 
 ## Optional Windows Terminal profile and font
 
@@ -46,7 +46,35 @@ For the matching font, open `assets\font.ttf` from a complete repository copy in
 
 Alternatively, you can apply [`termuxvoid-scheme.json`](termuxvoid-scheme.json) to an existing profile manually: back up Terminal's `settings.json`, add the JSON object to its top-level `"schemes"` array without replacing existing entries, then select `TermuxVoid` under the profile's Appearance settings.
 
-The image banner and shell shortcuts are not enabled yet. This setup does not install Fish, eza or jp2a, or change the default shell.
+The original image banner and shell shortcuts are not enabled. This setup does not install Fish, eza or jp2a, or change the default shell.
+
+## Optional animations
+
+Animations are **off by default** and never run after every command. After installing or updating, restart the same PowerShell profile to load the helper commands. No animation engine or runtime is installed until you explicitly request it:
+
+```powershell
+# Requires Python 3.8+ with venv and pip on PATH (py.exe or python.exe).
+Install-TermuxVoidAnimation -Engine TTE
+Enable-TermuxVoidWelcome
+```
+
+Open a new Windows Terminal tab for the TTE welcome. Turn it off with `Disable-TermuxVoidWelcome`. To skip it temporarily, set `$env:TERMUXVOID_NO_ANIMATION = '1'` before launching a child shell. Welcome playback only runs in an interactive Windows Terminal session; redirected input/output, `TERM=dumb`, small terminals, and the opt-out use a static message or skip playback. It does not run from the Starship prompt. If TTE is unavailable or fails, the prompt still loads with a plain-text fallback.
+
+Try the other engines **on demand**:
+
+```powershell
+# Requires Node.js 18.3+ and npm on PATH.
+Install-TermuxVoidAnimation -Engine AsciiRest
+Show-TermuxVoidAnimation -Engine AsciiRest
+
+# Requires Python 3.8+ with venv and pip on PATH.
+Install-TermuxVoidAnimation -Engine Asciimatics
+Show-TermuxVoidAnimation -Engine Asciimatics
+```
+
+You can also run `Show-TermuxVoidAnimation -Engine TTE` to preview the inline welcome. ascii.rest shows a two-second neon text banner; Asciimatics opens a short full-screen showcase. Interrupt with Ctrl+C. These features need an interactive terminal and have not been visually verified on every Windows console; the helper attempts to restore cursor visibility on exit.
+
+The explicit install commands download pinned packages: TTE 0.15.0 and Asciimatics 1.15.0 into `~\.config\TermuxVoid-Windows\animation-python`, and ascii.rest 0.4.0 into `~\.config\TermuxVoid-Windows\animation-node`. Asciimatics also installs its dependencies, including pywin32 on Windows. These directories and welcome preferences are retained when the theme is uninstalled; remove them manually if you no longer need them. Python and Node.js themselves are not installed automatically.
 
 ## Uninstall or restore
 
@@ -62,4 +90,4 @@ If installation fails partway through, inspect the profile and the printed backu
 
 ## Tests
 
-On Windows, run `powershell -NoProfile -File .\tests\windows.test.ps1` and/or `pwsh -NoProfile -File .\tests\windows.test.ps1`. The tests use a temporary home, profile, Terminal-fragment directory and fake WinGet; they do not install packages or change Windows Terminal settings. Separately verify actual WinGet installation and prompt rendering in a real Terminal, including a Git repository, success/failure and running background jobs.
+On Windows, run `powershell -NoProfile -File .\tests\windows.test.ps1` and/or `pwsh -NoProfile -File .\tests\windows.test.ps1`. The installer tests use a temporary home, profile, Terminal-fragment directory and fake WinGet; they do not install packages or change Windows Terminal settings. `tests/windows-animation.test.ps1` installs the optional engines into a temporary directory to exercise their setup. Separately verify actual WinGet installation and prompt rendering in a real Terminal, including a Git repository, success/failure and running background jobs.

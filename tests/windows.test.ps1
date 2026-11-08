@@ -55,9 +55,24 @@ try {
     $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
     $manifest.hashes.'starship.toml' = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash
     [System.IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json))
+    # Model a pre-animation installation to exercise profile migration.
+    $profileText = [System.IO.File]::ReadAllText($profilePath)
+    $animationOffset = $profileText.IndexOf(("`r`n" + '# >>> TermuxVoid Animations >>>'))
+    Assert ($animationOffset -ge 0) 'animation block present on fresh install'
+    [System.IO.File]::WriteAllText($profilePath, $profileText.Substring(0, $animationOffset), [System.Text.UTF8Encoding]::new($false))
+    foreach ($file in @('animation.ps1', 'animation-demo.py')) {
+        Remove-Item -LiteralPath (Join-Path $themeDir $file)
+        $manifest.hashes.PSObject.Properties.Remove($file)
+    }
+    [System.IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json))
     [byte[]]$beforeUpdate = [System.IO.File]::ReadAllBytes($profilePath)
     & $installer @testPaths -Update -SkipDependencyInstall
-    Assert (BytesEqual $beforeUpdate ([System.IO.File]::ReadAllBytes($profilePath))) 'update must not change profile'
+    [byte[]]$afterUpdate = [System.IO.File]::ReadAllBytes($profilePath)
+    Assert ($afterUpdate.Length -gt $beforeUpdate.Length) 'legacy update appends animation block'
+    [byte[]]$prefix = [byte[]]::new($beforeUpdate.Length)
+    [Array]::Copy($afterUpdate, $prefix, $prefix.Length)
+    Assert (BytesEqual $beforeUpdate $prefix) 'legacy profile bytes preserved on migration'
+    Assert (([System.IO.File]::ReadAllText($profilePath)).Contains('# >>> TermuxVoid Animations >>>')) 'animation block migrated'
     Assert ((Get-Content -LiteralPath $configPath -Raw).Contains('${env_var.USERNAME}')) 'update installs username prompt'
     Add-Content -LiteralPath $configPath -Value '# Custom edit'
     $failed = $false
