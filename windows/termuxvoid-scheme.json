@@ -1,0 +1,21 @@
+{
+  "name": "TermuxVoid",
+  "background": "#0B0E1F",
+  "foreground": "#F8F8F8",
+  "black": "#171717",
+  "red": "#D81765",
+  "green": "#97D01A",
+  "yellow": "#FFA800",
+  "blue": "#16B1FB",
+  "purple": "#FF2491",
+  "cyan": "#0FDCB6",
+  "white": "#EBEBEB",
+  "brightBlack": "#38252C",
+  "brightRed": "#FF0000",
+  "brightGreen": "#76B639",
+  "brightYellow": "#E1A126",
+  "brightBlue": "#289CD5",
+  "brightPurple": "#FF2491",
+  "brightCyan": "#0A9B81",
+  "brightWhite": "#F8F8F8"
+}

@@ -16,7 +16,11 @@ A professional terminal customization for Termux that transforms your mobile Lin
 - **Custom prompt with your name**
 - **Banner customization** (use your own image!)
 - **Automatic shell configuration**
-- **Clean uninstall** (no leftovers)
+- **Windows uninstall support** (see the Windows guide; Termux uninstall is not currently provided)
+
+## 🪟 Windows Terminal + PowerShell
+
+For the separate native Windows version, see the [Windows setup and uninstall guide](windows/README.md). The Termux installer below is not intended for Windows.
 
 ## 🛠️ Installation
 

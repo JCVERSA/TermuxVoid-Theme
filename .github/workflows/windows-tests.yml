@@ -1,0 +1,16 @@
+name: Windows installer
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  installer:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        shell: [powershell, pwsh]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test installer
+        shell: ${{ matrix.shell }}
+        run: ./tests/windows.test.ps1
