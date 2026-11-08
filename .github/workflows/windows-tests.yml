@@ -56,6 +56,15 @@ jobs:
             Write-Output "::error::$($_.Exception.Message) at $($_.ScriptStackTrace)"
             exit 1
           }
+      - name: Test interactive idle behavior in a Windows pseudoconsole
+        shell: pwsh
+        run: |
+          python -m pip install pywinpty==3.0.3 asciimatics==1.15.0
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python ./tests/windows-idle-demo.test.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python ./tests/windows-idle-interactive.test.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Test real Starship rendering
         shell: pwsh
         run: |

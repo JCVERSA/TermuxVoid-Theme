@@ -105,7 +105,7 @@ function global:Show-TermuxVoidAnimation {
         if ($LASTEXITCODE -ne 0) { throw "$Engine exited with code $LASTEXITCODE. Rerun the installer if its dependencies are missing." }
     } catch {
         if ($null -eq $IdleInputTick) { Write-Warning $_.Exception.Message; Write-Output 'Welcome to PowerShell Void!' }
-        else { $global:PowerShellVoidIdleFailed = $true }
+        else { $global:PowerShellVoidIdleError = $_.Exception.Message; $global:PowerShellVoidIdleFailed = $true }
     } finally {
         [Console]::Write("$([char]27)[?25h$([char]27)[0m")
         $global:LASTEXITCODE = $previousExitCode
@@ -149,7 +149,7 @@ function global:Invoke-PowerShellVoidIdle {
         Show-TermuxVoidAnimation -Engine Asciimatics -IdleInputTick $tick
         $global:PowerShellVoidIdleSince = $null
         $global:PowerShellVoidLastIdleEvent = $null
-    } catch { $global:PowerShellVoidIdleFailed = $true }
+    } catch { $global:PowerShellVoidIdleError = $_.Exception.Message; $global:PowerShellVoidIdleFailed = $true }
 }
 
 function global:Start-PowerShellVoidIdleMonitor {
