@@ -282,7 +282,7 @@ function global:Read-PVChoice([string]$Title, [string[]]$Items) {
     }
     $selection = 0
     $digits = ''
-    $compact = [bool]($env:WT_SESSION -and $env:TERM -ne 'dumb')
+    $compact = [bool]($env:WT_SESSION -and $env:TERM -ne 'dumb' -and $env:POWERSHELLVOID_PLAIN_MENU -ne '1')
     Write-Host 'Up/Down + Enter, or type a number + Enter. Esc/0 goes back.'
     Show-PVChoiceStatus ("Selected: {0}" -f $Items[$selection]) $compact
     while ($true) {

@@ -159,6 +159,17 @@ Write-Host '[[MENU-READY]]'
             other = 'Core' if edition == 'Desktop' else 'Desktop'
             assert json.loads((base / f'prompt-settings-{other}.json').read_text())['Time'] is True
             assert fragment['schemes'][0]['background'] == '#123456'
+            # Invalid animation preferences should return to the main menu with recovery guidance.
+            proc.write(f"[IO.File]::WriteAllText({quote(setting)}, '{{invalid'); Write-Host '[[BROKEN-SETTINGS]]'\r")
+            wait_for('[[BROKEN-SETTINGS]]')
+            proc.write("$env:POWERSHELLVOID_PLAIN_MENU = '1'; psvoid\r")
+            wait_for('=== PowerShell Void Manager', count=9)
+            proc.write('1\r')
+            wait_for('Back up and correct this JSON')
+            wait_for('=== PowerShell Void Manager', count=10)
+            proc.write('6\r')
+            proc.write("Write-Host ('RECOVERY' + '-DONE')\r")
+            wait_for('RECOVERY-DONE')
             proc.write('exit\r')
             print(f'PASS: {shell} interactive arrow and numbered manager')
         finally:
