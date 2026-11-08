@@ -24,7 +24,7 @@ $homeDir = if ($TestHome) { $TestHome } else { $HOME }
 $themeDir = Join-Path (Join-Path $homeDir '.config\TermuxVoid-Windows') $PSVersionTable.PSEdition
 try {
     New-Item -ItemType Directory -Path $tempDir | Out-Null
-    foreach ($file in @('termuxvoid.ps1', 'starship.toml', 'termuxvoid-scheme.json', 'animation.ps1', 'animation-demo.py')) {
+    foreach ($file in @('termuxvoid.ps1', 'starship.toml', 'termuxvoid-scheme.json', 'animation.ps1', 'animation-demo.py', 'animation-setup.ps1')) {
         Invoke-WebRequest -UseBasicParsing -Uri "$baseUrl/$file" -OutFile (Join-Path $tempDir $file)
     }
     $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $tempDir 'termuxvoid.ps1'))

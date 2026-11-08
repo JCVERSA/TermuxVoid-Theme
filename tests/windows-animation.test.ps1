@@ -1,48 +1,70 @@
 #Requires -Version 5.1
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('TermuxVoid-animation-test-' + [guid]::NewGuid().ToString('N'))
+$testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('PowerShellVoid-animation-test-' + [guid]::NewGuid().ToString('N'))
 $oldDisable = $env:TERMUXVOID_NO_ANIMATION
+$oldPath = $env:PATH
 function Assert($Condition, [string]$Message) { if (-not $Condition) { throw "FAIL: $Message" } }
 try {
     New-Item -ItemType Directory -Path $testRoot | Out-Null
+    $profile = Join-Path $testRoot 'Profile\profile.ps1'
+    $base = Join-Path $testRoot '.config\TermuxVoid-Windows'
+    $theme = Join-Path $base $PSVersionTable.PSEdition
+    # An isolated dummy Starship prevents WinGet from touching the runner.
+    $bin = Join-Path $testRoot 'bin'
+    New-Item -ItemType Directory -Path $bin | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $bin 'starship.cmd'), "@echo off`r`nexit /b 0`r`n")
+    $env:PATH = $bin + ';' + $env:PATH
+    & (Join-Path $root 'windows\termuxvoid.ps1') -TestHome $testRoot -TestProfile $profile -TestRunAnimationSetup -SkipTerminalProfile
+    $python = Join-Path $base 'animation-python\Scripts\python.exe'
+    $nodeCli = Join-Path $base 'animation-node\node_modules\ascii.rest\dist\cli.js'
+    Assert (Test-Path -LiteralPath $python) 'installer creates isolated Python environment'
+    Assert (Test-Path -LiteralPath $nodeCli) 'installer installs ascii.rest'
+    & $python -c 'import terminaltexteffects, asciimatics'
+    Assert ($LASTEXITCODE -eq 0) 'installer installs both Python engines'
+    & node.exe $nodeCli --version
+    Assert ($LASTEXITCODE -eq 0) 'ascii.rest CLI starts'
+
+    $env:TERMUXVOID_NO_ANIMATION = '1'
     $name = 'profile value'
     . (Join-Path $root 'windows\animation.ps1')
     Assert ($name -eq 'profile value') 'loading helpers preserves profile variables'
-    # Prevent the test from touching real user data; the helper resolves paths dynamically.
     function global:Get-TermuxVoidAnimationPaths {
         return @{
-            Base = $testRoot
-            Python = Join-Path $testRoot 'animation-python\Scripts\python.exe'
-            Node = Join-Path $testRoot 'animation-node\node_modules\ascii.rest\dist\cli.js'
-            Welcome = Join-Path $testRoot 'welcome.enabled'
-            Demo = Join-Path $root 'windows\animation-demo.py'
+            Base = $base
+            Python = $python
+            Node = $nodeCli
+            NodeRuntime = Join-Path $base 'animation-node-runtime\node.exe'
+            Settings = Join-Path $base 'animation-settings-test.json'
+            Demo = Join-Path $theme 'animation-demo.py'
+            Setup = Join-Path $theme 'animation-setup.ps1'
         }
     }
-    $env:TERMUXVOID_NO_ANIMATION = '1'
     foreach ($engine in @('TTE', 'AsciiRest', 'Asciimatics')) {
-        Assert ((Show-TermuxVoidAnimation -Engine $engine) -eq 'Welcome to TermuxVoid!') 'disabled animation uses static fallback'
+        Assert ((Show-PowerShellVoidAnimation -Engine $engine) -eq 'Welcome to PowerShell Void!') 'disabled animation uses static fallback'
     }
-    $failed = $false
-    try { Enable-TermuxVoidWelcome } catch { $failed = $true }
-    Assert $failed 'welcome cannot be enabled without TTE'
-    Assert (-not (Test-Path -LiteralPath (Join-Path $testRoot 'welcome.enabled'))) 'failed enable does not create preference'
-    # Real packages are installed only inside this disposable test directory.
-    Install-TermuxVoidAnimation -Engine TTE
+    $settings = Get-PowerShellVoidAnimationSettings
+    Assert ($settings.Welcome -and $settings.Banner -and $settings.Idle -and $settings.IdleSeconds -eq 5) 'animations enabled with five-second default'
+    Set-PowerShellVoidAnimation -Welcome Off -IdleSeconds 12
+    $settings = Get-PowerShellVoidAnimationSettings
+    Assert (-not $settings.Welcome -and $settings.Banner -and $settings.Idle -and $settings.IdleSeconds -eq 12) 'individual settings are saved'
+    Disable-PowerShellVoidWelcome
+    $settings = Get-PowerShellVoidAnimationSettings
+    Assert (-not $settings.Welcome -and -not $settings.Banner -and $settings.Idle) 'welcome switch controls both startup effects'
     Enable-TermuxVoidWelcome
-    Assert (Test-Path -LiteralPath (Join-Path $testRoot 'welcome.enabled')) 'enable creates preference'
-    Disable-TermuxVoidWelcome
-    Assert (-not (Test-Path -LiteralPath (Join-Path $testRoot 'welcome.enabled'))) 'disable removes preference'
-    Install-TermuxVoidAnimation -Engine Asciimatics
-    $paths = Get-TermuxVoidAnimationPaths
-    & $paths.Python -c 'import terminaltexteffects, asciimatics'
-    Assert ($LASTEXITCODE -eq 0) 'both Python engines import from isolated environment'
-    Install-TermuxVoidAnimation -Engine AsciiRest
-    Assert (Test-Path -LiteralPath $paths.Node) 'ascii.rest installed in isolated directory'
-    & node.exe $paths.Node --version
-    Assert ($LASTEXITCODE -eq 0) 'ascii.rest CLI starts'
-    Write-Host 'PASS: Animation helpers and dependency setup'
+    $settings = Get-PowerShellVoidAnimationSettings
+    Assert ($settings.Welcome -and $settings.Banner) 'old welcome command remains compatible'
+    Set-PowerShellVoidAnimation -Idle Off
+    Assert (-not (Get-PowerShellVoidAnimationSettings).Idle) 'idle can be disabled'
+    $failed = $false
+    try { Set-PowerShellVoidAnimation -IdleSeconds 0 } catch { $failed = $true }
+    Assert $failed 'invalid idle duration is rejected'
+    & (Join-Path $root 'windows\termuxvoid.ps1') -TestHome $testRoot -TestProfile $profile -Uninstall
+    Assert (Test-Path -LiteralPath $python) 'uninstall retains shared dependencies'
+    Assert (Test-Path -LiteralPath (Join-Path $base 'animation-settings-test.json')) 'uninstall retains settings'
+    Write-Host 'PASS: automatic animation setup and configuration'
 } finally {
+    $env:PATH = $oldPath
     $env:TERMUXVOID_NO_ANIMATION = $oldDisable
     if (Test-Path -LiteralPath $testRoot) { Remove-Item -LiteralPath $testRoot -Recurse -Force }
 }

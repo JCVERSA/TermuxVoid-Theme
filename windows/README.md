@@ -1,4 +1,4 @@
-# TermuxVoid for Windows Terminal + PowerShell
+# PowerShell Void for Windows Terminal + PowerShell
 
 The Windows version uses Starship for the prompt and keeps its configuration separate from Termux and any existing Starship configuration. It shows the current username, directory, Git branch (in a repository), local time, the previous command's status, command duration when at least two seconds, and relevant Python, Node.js, Rust, .NET, and package context when detected:
 
@@ -13,14 +13,14 @@ Use Windows Terminal with Windows PowerShell 5.1 or PowerShell 7. In the profile
 & ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/JCVERSA/TermuxVoid-Theme/arena/d693b190-termuxvoid-theme/windows/install.ps1')))
 ```
 
-This downloads and runs code from the current development branch. You can [inspect the bootstrap script](install.ps1) and [installer](termuxvoid.ps1) first. The bootstrap downloads those files into a temporary folder and runs setup in a child PowerShell process with a process-only execution-policy bypass; group policies can still prevent execution. It cleans up its temporary files. Run the same command to install or update: existing installations use the guarded update described below. During setup you can opt into a separate TermuxVoid Windows Terminal profile with the original colors.
+This downloads and runs code from the current development branch. You can [inspect the bootstrap script](install.ps1) and [installer](termuxvoid.ps1) first. The bootstrap downloads those files into a temporary folder and runs setup in a child PowerShell process with a process-only execution-policy bypass; group policies can still prevent execution. It cleans up its temporary files. Run the same command to install or update: existing installations use the guarded update described below. During setup you can opt into a separate PowerShell Void Windows Terminal profile with the original colors.
 
 Alternatively, from a complete repository checkout, run `.\windows\termuxvoid.ps1` for an install or `.\windows\termuxvoid.ps1 -Update` to update.
 If Starship is not already on PATH, the installer uses WinGet to install the per-user portable `Starship.Starship` package. This requires an internet connection and WinGet, accepts the WinGet source and package agreements, and changes the user's installed packages/PATH. A missing WinGet or failed installation stops setup before theme files are changed. If Starship is already on PATH, nothing is downloaded. Restart **Windows Terminal** after setup so it picks up PATH changes; open the same PowerShell profile to see the prompt.
 
 Git is only needed for working with Git repositories and is not installed or upgraded. The prompt works without Git; it shows a branch only inside a repository. Colors and font are optional visual customization, not required dependencies; the installer does not rewrite Windows Terminal settings or install fonts.
 
-For offline or managed environments, use `-SkipDependencyInstall` with the local installer to skip WinGet. The prompt won't initialize until Starship is available on PATH. The managed profile block sets `STARSHIP_CONFIG` in that shell session and initializes Starship. It doesn't overwrite your existing Starship config, but that config isn't used while the block is active. Other prompt customizations may conflict.
+For offline or managed environments, use `-SkipDependencyInstall` with the local installer to skip dependency setup. The prompt won't initialize until Starship is available on PATH. The managed profile block sets `STARSHIP_CONFIG` in that shell session and initializes Starship. It doesn't overwrite your existing Starship config, but that config isn't used while the block is active. Other prompt customizations may conflict.
 
 If Windows blocks scripts, inspect the script and execution-policy requirements first. A temporary process-only option is `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`, followed by the command above. This does not override a machine/group policy. Downloaded files may also be marked as coming from the internet.
 
@@ -38,43 +38,37 @@ This supports the earlier TermuxVoid Windows installer. It checks installed file
 
 ## Optional Windows Terminal profile and font
 
-During installation or update, answer `y` when asked to create a TermuxVoid profile. This creates a Windows Terminal JSON fragment under `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\TermuxVoid-Theme`, containing the original color scheme and a **separate** profile for the current PowerShell edition. Restart Windows Terminal and select **TermuxVoid PowerShell 7** or **TermuxVoid Windows PowerShell** in the profile menu. Your existing profiles and `settings.json` are not modified. Profile overrides or a conflicting scheme in your own Terminal settings can take precedence.
+During installation or update, answer `y` when asked to create a PowerShell Void profile. This creates a Windows Terminal JSON fragment under `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\TermuxVoid-Theme`, containing the original color scheme and a **separate** profile for the current PowerShell edition. Restart Windows Terminal and select **PowerShell Void 7** or **PowerShell Void Windows PowerShell** in the profile menu. Your existing profiles and `settings.json` are not modified. Profile overrides or a conflicting scheme in your own Terminal settings can take precedence.
 
 For a local noninteractive install, pass `-TerminalProfile` to opt in or `-SkipTerminalProfile` to skip the prompt. The short command also accepts either switch after the closing parenthesis. Updates preserve a previously installed fragment; they refuse to overwrite a modified or unowned fragment. The uninstaller removes an unchanged fragment but retains a modified one. Settings you manually saved in Windows Terminal may remain after removal.
 
-For the matching font, open `assets\font.ttf` from a complete repository copy in Windows and select **Install**, then set the TermuxVoid profile's **Font face** to `UbuntuMono Nerd Font` in Terminal Settings → Appearance. The installer does not install it automatically: its metadata references the Ubuntu Font Licence 1.0, but this repository does not include complete font provenance or a separate font license. Verify its distribution terms before redistributing it. A different installed Nerd Font is also acceptable.
+For the matching font, open `assets\font.ttf` from a complete repository copy in Windows and select **Install**, then set the PowerShell Void profile's **Font face** to `UbuntuMono Nerd Font` in Terminal Settings → Appearance. The installer does not install it automatically: its metadata references the Ubuntu Font Licence 1.0, but this repository does not include complete font provenance or a separate font license. Verify its distribution terms before redistributing it. A different installed Nerd Font is also acceptable.
 
-Alternatively, you can apply [`termuxvoid-scheme.json`](termuxvoid-scheme.json) to an existing profile manually: back up Terminal's `settings.json`, add the JSON object to its top-level `"schemes"` array without replacing existing entries, then select `TermuxVoid` under the profile's Appearance settings.
+Alternatively, you can apply [`termuxvoid-scheme.json`](termuxvoid-scheme.json) to an existing profile manually: back up Terminal's `settings.json`, add the JSON object to its top-level `"schemes"` array without replacing existing entries, then select `PowerShell Void` under the profile's Appearance settings.
 
 The original image banner and shell shortcuts are not enabled. This setup does not install Fish, eza or jp2a, or change the default shell.
 
-## Optional animations
+## Animations
 
-Animations are **off by default** and never run after every command. After installing or updating, restart the same PowerShell profile to load the helper commands. No animation engine or runtime is installed until you explicitly request it:
+The installer automatically sets up all three animation engines. In interactive Windows Terminal sessions the TTE welcome and ascii.rest banner play at startup; Asciimatics shows a full-screen starfield after **five seconds** of inactivity at an empty PowerShell prompt. It stops on keyboard or mouse activity, without intentionally consuming the key. It does not run while a command or interactive application is running, or while a command line contains text. It requires PSReadLine and Windows' session-wide last-input detection, so activity in other applications can delay or dismiss it. The display is not guaranteed to be limited to the active Windows Terminal tab. Very old PSReadLine versions or other event handlers may prevent idle detection. No packages are downloaded at shell startup.
 
-```powershell
-# Requires Python 3.8+ with venv and pip on PATH (py.exe or python.exe).
-Install-TermuxVoidAnimation -Engine TTE
-Enable-TermuxVoidWelcome
-```
-
-Open a new Windows Terminal tab for the TTE welcome. Turn it off with `Disable-TermuxVoidWelcome`. To skip it temporarily, set `$env:TERMUXVOID_NO_ANIMATION = '1'` before launching a child shell. Welcome playback only runs in an interactive Windows Terminal session; redirected input/output, `TERM=dumb`, `NO_COLOR`, small terminals, and the opt-out use a static message or skip playback. It does not run from the Starship prompt. If TTE is unavailable or fails, the prompt still loads with a plain-text fallback.
-
-Try the other engines **on demand**:
+After installation or update, restart the same PowerShell profile. Use these commands to configure the animations independently:
 
 ```powershell
-# Requires Node.js 18.3+ and npm on PATH.
-Install-TermuxVoidAnimation -Engine AsciiRest
-Show-TermuxVoidAnimation -Engine AsciiRest
-
-# Requires Python 3.8+ with venv and pip on PATH.
-Install-TermuxVoidAnimation -Engine Asciimatics
-Show-TermuxVoidAnimation -Engine Asciimatics
+Set-PowerShellVoidAnimation -Welcome Off       # TTE startup welcome
+Set-PowerShellVoidAnimation -Banner Off        # ascii.rest startup banner
+Set-PowerShellVoidAnimation -Idle Off          # Asciimatics idle showcase
+Set-PowerShellVoidAnimation -Idle On -IdleSeconds 30
+Set-PowerShellVoidAnimation -Welcome On -Banner On
 ```
 
-You can also run `Show-TermuxVoidAnimation -Engine TTE` to preview the inline welcome. ascii.rest shows a two-second neon text banner; Asciimatics opens a short full-screen showcase. Interrupt with Ctrl+C. These features need an interactive terminal and have not been visually verified on every Windows console; the helper attempts to restore cursor visibility on exit.
+Use `Disable-PowerShellVoidWelcome` or `Enable-PowerShellVoidWelcome` to switch both startup effects together. The previous `Enable-TermuxVoidWelcome`, `Disable-TermuxVoidWelcome`, `Install-TermuxVoidAnimation` and `Show-TermuxVoidAnimation` commands remain available for compatibility. To preview an effect, run `Show-PowerShellVoidAnimation -Engine TTE`, `-Engine AsciiRest`, or `-Engine Asciimatics`. Set `$env:TERMUXVOID_NO_ANIMATION = '1'` before launching a child shell to temporarily suppress all animations. Redirected sessions, `TERM=dumb`, `NO_COLOR`, and small terminals skip animations or use plain text. The timer accepts 1–3600 seconds.
 
-The explicit install commands download pinned packages: TTE 0.15.0 and Asciimatics 1.15.0 into `~\.config\TermuxVoid-Windows\animation-python`, and ascii.rest 0.4.0 into `~\.config\TermuxVoid-Windows\animation-node`. Asciimatics also installs its dependencies, including pywin32 on Windows. These directories and welcome preferences are retained when the theme is uninstalled; remove them manually if you no longer need them. Python and Node.js themselves are not installed automatically.
+### Automatic dependencies and cleanup
+
+The installer uses an existing Python 3.8+ (with venv and pip), or attempts to install Python 3.12 per-user with WinGet if needed. WinGet accepts package and source agreements and changes the user's installed programs; installation can fail because of policies or connectivity. Existing Node.js 18.3+ and npm are used if available; otherwise a pinned, SHA-256-verified Node.js 24.22.1 archive is downloaded into the user directory on x64 or ARM64 Windows. Unsupported architectures require a suitable Node installation. The installer downloads pinned TTE 0.15.0, Asciimatics 1.15.0 (including pywin32 on Windows), and ascii.rest 0.4.0 into `~\.config\TermuxVoid-Windows`. Setup fails with instructions if a dependency cannot be installed; it may leave a Python installation or partial per-user dependency directories behind. Review an incomplete directory before removing it and retrying.
+
+`-SkipDependencyInstall` skips both Starship and animation dependencies. Uninstall retains shared dependencies and animation settings so another PowerShell edition is not broken. If no longer needed, remove `animation-python`, `animation-node`, `animation-node-runtime`, and the `animation-settings-*.json` files from that directory manually. Python installed via WinGet is a separate Windows application and must be removed separately if desired.
 
 ## Uninstall or restore
 
@@ -84,10 +78,10 @@ From the same PowerShell edition and host used to install:
 & "$HOME\.config\TermuxVoid-Windows\$($PSVersionTable.PSEdition)\termuxvoid.ps1" -Uninstall
 ```
 
-Alternatively, run `./windows/termuxvoid.ps1 -Uninstall` from the repository. The uninstaller backs up the current profile and removes only the unchanged managed block, preserving other profile bytes. If the block was edited, it stops; remove the marked block manually and run uninstall again. Installed files changed since installation are retained. Backups, Starship, fonts, and Windows Terminal settings remain; an unchanged optional Terminal fragment is removed. To restore an original profile instead, choose a backup and copy it to `$PROFILE.CurrentUserCurrentHost` after reviewing later changes.
+Alternatively, run `./windows/termuxvoid.ps1 -Uninstall` from the repository. The uninstaller backs up the current profile and removes only the unchanged managed block, preserving other profile bytes. If the block was edited, it stops; remove the marked block manually and run uninstall again. Installed files changed since installation are retained. Backups, Starship, animation dependencies and preferences, fonts, and Windows Terminal settings remain; an unchanged optional Terminal fragment is removed. To restore an original profile instead, choose a backup and copy it to `$PROFILE.CurrentUserCurrentHost` after reviewing later changes.
 
 If installation fails partway through, inspect the profile and the printed backup path. Installation files may remain under `~\.config\TermuxVoid-Windows\<edition>`; review them before removing them. Don't delete backups until you no longer need them.
 
 ## Tests
 
-On Windows, run `powershell -NoProfile -File .\tests\windows.test.ps1` and/or `pwsh -NoProfile -File .\tests\windows.test.ps1`. The installer tests use a temporary home, profile, Terminal-fragment directory and fake WinGet; they do not install packages or change Windows Terminal settings. `tests/windows-animation.test.ps1` installs the optional engines into a temporary directory to exercise their setup. Separately verify actual WinGet installation and prompt rendering in a real Terminal, including a Git repository, success/failure and running background jobs.
+On Windows, run `powershell -NoProfile -File .\tests\windows.test.ps1` and/or `pwsh -NoProfile -File .\tests\windows.test.ps1`. The installer tests use a temporary home, profile, Terminal-fragment directory and fake WinGet; they do not install packages or change Windows Terminal settings. `tests/windows-animation.test.ps1` downloads the animation packages into a temporary directory to exercise automatic setup and settings. Separately verify actual WinGet installation and prompt rendering in a real Terminal, including a Git repository, success/failure and running background jobs.

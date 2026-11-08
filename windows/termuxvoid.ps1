@@ -12,7 +12,8 @@ param(
     [switch]$SkipTerminalProfile,
     # Test-only paths. The generated profile is intended for the real user's HOME.
     [Parameter(DontShow)] [string]$TestHome,
-    [Parameter(DontShow)] [string]$TestProfile
+    [Parameter(DontShow)] [string]$TestProfile,
+    [Parameter(DontShow)] [switch]$TestRunAnimationSetup
 )
 
 $ErrorActionPreference = 'Stop'
@@ -111,11 +112,11 @@ function Save-TerminalProfile($Manifest, $PreviousHash) {
         Write-Host "Terminal fragment backup: $backupDir"
     }
     $scheme = Get-Content -LiteralPath $schemeFile -Raw | ConvertFrom-Json
-    $scheme.name = 'TermuxVoid ' + $PSVersionTable.PSEdition
+    $scheme.name = 'PowerShell Void ' + $PSVersionTable.PSEdition
     $powerShellPath = (Get-Process -Id $PID).Path
     if (-not $powerShellPath) { throw 'Cannot find the current PowerShell executable.' }
     $profileGuid = if ($PSVersionTable.PSEdition -eq 'Core') { '{c04eb7b9-0a8d-4fc1-a6c6-dd5b94effd81}' } else { '{b29cc26a-e530-4639-a25b-34e13e5cd7b2}' }
-    $label = if ($PSVersionTable.PSEdition -eq 'Core') { 'TermuxVoid PowerShell 7' } else { 'TermuxVoid Windows PowerShell' }
+    $label = if ($PSVersionTable.PSEdition -eq 'Core') { 'PowerShell Void 7' } else { 'PowerShell Void Windows PowerShell' }
     $profile = @{ name = $label; guid = $profileGuid; commandline = '"' + $powerShellPath + '"'; colorScheme = $scheme.name }
     $fragment = @{ profiles = @($profile); schemes = @($scheme) } | ConvertTo-Json -Depth 8
     New-Item -ItemType Directory -Path $fragmentDir -Force | Out-Null
@@ -131,7 +132,7 @@ function Should-CreateTerminalProfile($PreviousHash) {
     if ($TerminalProfile -or $PreviousHash) { return $true }
     # Automated integration tests run non-interactively against isolated paths.
     if ($TestHome) { return $false }
-    $answer = Read-Host 'Add a separate TermuxVoid Windows Terminal profile with matching colors? [y/N]'
+    $answer = Read-Host 'Add a separate PowerShell Void Windows Terminal profile with matching colors? [y/N]'
     return $answer -match '^(y|yes)$'
 }
 
@@ -201,7 +202,7 @@ if ($Uninstall) {
             Write-Warning 'LOCALAPPDATA is unavailable; the Windows Terminal fragment was retained.'
         }
         # Only known files whose contents still match the manifest are deleted.
-        foreach ($file in @('starship.toml', 'termuxvoid.ps1', 'animation.ps1', 'animation-demo.py')) {
+        foreach ($file in @('starship.toml', 'termuxvoid.ps1', 'animation.ps1', 'animation-demo.py', 'animation-setup.ps1')) {
             $path = Join-Path $themeDir $file
             if (Test-Path -LiteralPath $path -PathType Leaf) {
                 $expected = $manifest.hashes.$file
@@ -228,11 +229,12 @@ if ($Uninstall) {
 $sourceConfig = Join-Path $PSScriptRoot 'starship.toml'
 $sourceAnimation = Join-Path $PSScriptRoot 'animation.ps1'
 $sourceDemo = Join-Path $PSScriptRoot 'animation-demo.py'
+$sourceSetup = Join-Path $PSScriptRoot 'animation-setup.ps1'
 if (-not (Test-Path -LiteralPath $sourceConfig -PathType Leaf)) {
     throw 'The Windows Starship template is missing. Run the installer from a complete checkout or extracted archive.'
 }
 
-if (-not (Test-Path -LiteralPath $sourceAnimation -PathType Leaf) -or -not (Test-Path -LiteralPath $sourceDemo -PathType Leaf)) { throw 'Animation files are missing from the installer source.' }
+if (-not (Test-Path -LiteralPath $sourceAnimation -PathType Leaf) -or -not (Test-Path -LiteralPath $sourceDemo -PathType Leaf) -or -not (Test-Path -LiteralPath $sourceSetup -PathType Leaf)) { throw 'Animation files are missing from the installer source.' }
 
 if ($Update) {
     if ($starts.Count -ne 1 -or $ends.Count -ne 1 -or $blocks.Count -ne 1) {
@@ -253,7 +255,7 @@ if ($Update) {
             throw "Installed file is missing or modified: $path. Back up your changes and resolve this before updating. No changes made."
         }
     }
-    foreach ($file in @('animation.ps1', 'animation-demo.py')) {
+    foreach ($file in @('animation.ps1', 'animation-demo.py', 'animation-setup.ps1')) {
         $path = Join-Path $themeDir $file
         $expected = $oldManifest.hashes.$file
         if ($expected -and (-not (Test-Path -LiteralPath $path -PathType Leaf) -or (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $expected)) {
@@ -287,6 +289,11 @@ if (-not (Get-Command starship -CommandType Application -ErrorAction SilentlyCon
     }
 }
 
+# Setup is explicit here, never on profile startup. Tests isolate dependency setup separately.
+if (-not $SkipDependencyInstall -and (-not $TestHome -or $TestRunAnimationSetup)) {
+    & $sourceSetup -Base $themeBase
+}
+
 Write-Host "$(if ($Update) { 'Updating' } else { 'Installing' }) for $($PSVersionTable.PSEdition) into $themeDir"
 if ($Update) {
     $backupDir = Join-Path $themeBase ('backups\update-' + [guid]::NewGuid().ToString('N'))
@@ -294,7 +301,7 @@ if ($Update) {
     foreach ($file in @('starship.toml', 'termuxvoid.ps1', 'manifest.json')) {
         Copy-Item -LiteralPath (Join-Path $themeDir $file) -Destination (Join-Path $backupDir $file)
     }
-    foreach ($file in @('animation.ps1', 'animation-demo.py')) {
+    foreach ($file in @('animation.ps1', 'animation-demo.py', 'animation-setup.ps1')) {
         $path = Join-Path $themeDir $file
         if (Test-Path -LiteralPath $path -PathType Leaf) { Copy-Item -LiteralPath $path -Destination (Join-Path $backupDir $file) }
     }
@@ -305,6 +312,7 @@ if ($Update) {
         Copy-Item -LiteralPath $PSCommandPath -Destination $installedScript -Force
         Copy-Item -LiteralPath $sourceAnimation -Destination (Join-Path $themeDir 'animation.ps1') -Force
         Copy-Item -LiteralPath $sourceDemo -Destination (Join-Path $themeDir 'animation-demo.py') -Force
+        Copy-Item -LiteralPath $sourceSetup -Destination (Join-Path $themeDir 'animation-setup.ps1') -Force
         $manifest = @{
             profilePath = $profilePath
             hashes = @{
@@ -312,6 +320,7 @@ if ($Update) {
                 'termuxvoid.ps1' = (Get-FileHash -LiteralPath $installedScript -Algorithm SHA256).Hash
                 'animation.ps1' = (Get-FileHash -LiteralPath (Join-Path $themeDir 'animation.ps1') -Algorithm SHA256).Hash
                 'animation-demo.py' = (Get-FileHash -LiteralPath (Join-Path $themeDir 'animation-demo.py') -Algorithm SHA256).Hash
+            'animation-setup.ps1' = (Get-FileHash -LiteralPath (Join-Path $themeDir 'animation-setup.ps1') -Algorithm SHA256).Hash
             }
         }
         if ($oldManifest.terminalFragmentHash) { $manifest.terminalFragmentHash = $oldManifest.terminalFragmentHash }
@@ -342,6 +351,7 @@ try {
     Copy-Item -LiteralPath $PSCommandPath -Destination $installedScript
     Copy-Item -LiteralPath $sourceAnimation -Destination (Join-Path $themeDir 'animation.ps1')
     Copy-Item -LiteralPath $sourceDemo -Destination (Join-Path $themeDir 'animation-demo.py')
+    Copy-Item -LiteralPath $sourceSetup -Destination (Join-Path $themeDir 'animation-setup.ps1')
     $manifest = @{
         profilePath = $profilePath
         hashes = @{
@@ -349,6 +359,7 @@ try {
             'termuxvoid.ps1' = (Get-FileHash -LiteralPath $installedScript -Algorithm SHA256).Hash
             'animation.ps1' = (Get-FileHash -LiteralPath (Join-Path $themeDir 'animation.ps1') -Algorithm SHA256).Hash
             'animation-demo.py' = (Get-FileHash -LiteralPath (Join-Path $themeDir 'animation-demo.py') -Algorithm SHA256).Hash
+            'animation-setup.ps1' = (Get-FileHash -LiteralPath (Join-Path $themeDir 'animation-setup.ps1') -Algorithm SHA256).Hash
         }
     }
     [System.IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json), [System.Text.UTF8Encoding]::new($false))
