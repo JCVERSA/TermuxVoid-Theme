@@ -68,6 +68,8 @@ Write-Host '[[MENU-READY]]'
 
         try:
             wait_for('[[MENU-READY]]')
+            proc.write("Write-Host ('BINDING:' + (Get-PSReadLineKeyHandler -Chord 'Ctrl+Alt+v').Function)\r")
+            wait_for('BINDING:PowerShellVoidManager')
             proc.write('psvoid\r')
             wait_for('=== PowerShell Void Manager')
             proc.write('\x1b[B')
@@ -85,6 +87,12 @@ Write-Host '[[MENU-READY]]'
             proc.write('6\r')
             proc.write("Write-Host ('MENU' + '-DONE')\r")
             wait_for('MENU-DONE')
+            # ConPTY encodes Ctrl+Alt+V as Alt + Ctrl-V.
+            proc.write('\x1b\x16')
+            wait_for('=== PowerShell Void Manager', count=4)
+            proc.write('6\r')
+            proc.write("Write-Host ('HOTKEY' + '-DONE')\r")
+            wait_for('HOTKEY-DONE')
             setting = base / ('animation-settings-Desktop.json' if shell == 'powershell.exe' else 'animation-settings-Core.json')
             state = json.loads(setting.read_text())
             assert state['Welcome'] is False and state['Banner'] is True
@@ -94,6 +102,45 @@ Write-Host '[[MENU-READY]]'
             proc.close(force=True)
 
 
+def test_conflicting_shortcut(shell):
+    with tempfile.TemporaryDirectory(prefix='powershell-void-conflict-') as tmp:
+        setup = Path(tmp) / 'conflict.ps1'
+        setup.write_text(f"""
+$ErrorActionPreference = 'Stop'
+$env:WT_SESSION = 'test'
+Import-Module PSReadLine
+Set-PSReadLineKeyHandler -Chord 'Ctrl+Alt+v' -BriefDescription 'ExistingBinding' -ScriptBlock {{ }}
+. {quote(ROOT / 'windows/manager.ps1')}
+Write-Host ('[[CONFLICT:' + (Get-PSReadLineKeyHandler -Chord 'Ctrl+Alt+v').Function + ']]')
+""", encoding='utf-8')
+        proc = PtyProcess.spawn([shell, '-NoProfile', '-NoLogo', '-NoExit', '-File', str(setup)], dimensions=(30, 120))
+        result = []
+        chunks = queue.Queue()
+        def reader():
+            try:
+                while True:
+                    chunks.put(proc.read(4096))
+            except (EOFError, OSError):
+                pass
+        threading.Thread(target=reader, daemon=True).start()
+        try:
+            end = time.monotonic() + 15
+            while time.monotonic() < end:
+                try: result.append(chunks.get(timeout=.2))
+                except queue.Empty: pass
+                if '[[CONFLICT:ExistingBinding]]' in ''.join(result):
+                    print(f'PASS: {shell} existing shortcut preserved')
+                    return
+            raise AssertionError(f'{shell}: existing shortcut not preserved: {"".join(result)[-6000:]}')
+        finally:
+            proc.close(force=True)
+
+
 if __name__ == '__main__':
-    for executable in ('powershell.exe', 'pwsh.exe'):
-        run(executable)
+    try:
+        for executable in ('powershell.exe', 'pwsh.exe'):
+            run(executable)
+            test_conflicting_shortcut(executable)
+    except Exception as exc:
+        print('::error::' + str(exc).replace('\n', '%0A').replace('\r', '%0D'), flush=True)
+        raise
