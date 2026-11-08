@@ -29,9 +29,17 @@ if ($Engine -ne 'AsciiRest') {
             Write-Host 'Python is missing: installing Python 3.12 for the current user with WinGet (package agreements are accepted).'
             & $winget.Source install --id Python.Python.3.12 --exact --source winget --scope user --accept-package-agreements --accept-source-agreements --disable-interactivity
             if ($LASTEXITCODE -ne 0) { throw "WinGet failed to install Python (exit $LASTEXITCODE). Install Python 3.8+ and retry." }
-            $candidate = Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'
-            if (Test-Path -LiteralPath $candidate -PathType Leaf) { $pythonPath = $candidate }
-            else { throw 'Python was installed but could not be located. Restart PowerShell and rerun setup.' }
+            if ($env:LOCALAPPDATA) {
+                foreach ($directory in @('Python312', 'Python312-arm64', 'Python312-32')) {
+                    $candidate = Join-Path $env:LOCALAPPDATA ("Programs\Python\$directory\python.exe")
+                    if (Test-Path -LiteralPath $candidate -PathType Leaf) { $pythonPath = $candidate; break }
+                }
+            }
+            if (-not $pythonPath -and $launcher) {
+                & $launcher.Source -3.12 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)' 2>$null
+                if ($LASTEXITCODE -eq 0) { $pythonPath = $launcher.Source; $pythonArgs = @('-3.12') }
+            }
+            if (-not $pythonPath) { throw 'Python was installed but could not be located. Restart PowerShell and rerun setup.' }
         }
         if (Test-Path -LiteralPath (Join-Path $Base 'animation-python')) {
             throw 'An incomplete animation-python directory already exists. Inspect it before removing it and retrying.'
