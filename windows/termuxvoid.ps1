@@ -64,6 +64,18 @@ Remove-Variable termuxVoidAnimation -ErrorAction SilentlyContinue
 '@
 $animationBlock = "`r`n" + (($animationBlock -split "`r?`n") -join "`r`n") + "`r`n"
 
+function Get-TVFileHash([string]$Path) {
+    $algorithm = [System.Security.Cryptography.SHA256]::Create()
+    $stream = $null
+    try {
+        $stream = [System.IO.File]::OpenRead($Path)
+        return [BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-', '')
+    } finally {
+        if ($stream) { $stream.Dispose() }
+        $algorithm.Dispose()
+    }
+}
+
 function Get-ProfileEncoding([byte[]]$Bytes) {
     # BOMs are inspected before UTF-16 because UTF-32 LE starts with the same bytes.
     if ($Bytes.Length -ge 4 -and $Bytes[0] -eq 0xff -and $Bytes[1] -eq 0xfe -and $Bytes[2] -eq 0 -and $Bytes[3] -eq 0) { return [System.Text.Encoding]::UTF32 }
@@ -103,7 +115,7 @@ function Save-TerminalProfile($Manifest, $PreviousHash) {
     $schemeFile = Join-Path $PSScriptRoot 'termuxvoid-scheme.json'
     if (-not (Test-Path -LiteralPath $schemeFile -PathType Leaf)) { throw 'Windows Terminal color scheme is missing.' }
     if (Test-Path -LiteralPath $fragmentPath) {
-        if (-not $PreviousHash -or (Get-FileHash -LiteralPath $fragmentPath -Algorithm SHA256).Hash -ne $PreviousHash) {
+        if (-not $PreviousHash -or (Get-TVFileHash $fragmentPath) -ne $PreviousHash) {
             throw "A modified or unowned fragment already exists: $fragmentPath. It was not overwritten."
         }
         $backupDir = Join-Path $themeBase ('backups\terminal-' + [guid]::NewGuid().ToString('N'))
@@ -129,7 +141,7 @@ function Save-TerminalProfile($Manifest, $PreviousHash) {
     $fragment = @{ profiles = @($profile); schemes = @($scheme) } | ConvertTo-Json -Depth 8
     New-Item -ItemType Directory -Path $fragmentDir -Force | Out-Null
     [System.IO.File]::WriteAllText($fragmentPath, $fragment, [System.Text.UTF8Encoding]::new($false))
-    $Manifest.terminalFragmentHash = (Get-FileHash -LiteralPath $fragmentPath -Algorithm SHA256).Hash
+    $Manifest.terminalFragmentHash = (Get-TVFileHash $fragmentPath)
     [System.IO.File]::WriteAllText($manifestPath, ($Manifest | ConvertTo-Json -Depth 8), [System.Text.UTF8Encoding]::new($false))
     Write-Host "Added Windows Terminal profile '$label'. Select it from Terminal's profile menu after restarting."
     Write-Host 'The matching Nerd Font is optional; see the Windows guide for installation and licensing notes.'
@@ -183,7 +195,7 @@ if ($Uninstall) {
     # Preserve a manager-customized Terminal profile as user data before removal.
     if ($manifest -and $manifest.terminalColors -and $manifest.terminalFragmentHash -and $fragmentPath -and
         (Test-Path -LiteralPath $fragmentPath -PathType Leaf) -and
-        (Get-FileHash -LiteralPath $fragmentPath -Algorithm SHA256).Hash -eq $manifest.terminalFragmentHash) {
+        (Get-TVFileHash $fragmentPath) -eq $manifest.terminalFragmentHash) {
         $colorBackup = Join-Path $themeBase ('backups\terminal-uninstall-' + [guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $colorBackup -Force | Out-Null
         Copy-Item -LiteralPath $fragmentPath -Destination (Join-Path $colorBackup 'terminal-fragment.json')
@@ -210,7 +222,7 @@ if ($Uninstall) {
 
     if ($null -ne $manifest) {
         if ($manifest.terminalFragmentHash -and $fragmentPath -and (Test-Path -LiteralPath $fragmentPath -PathType Leaf)) {
-            if ((Get-FileHash -LiteralPath $fragmentPath -Algorithm SHA256).Hash -eq $manifest.terminalFragmentHash) {
+            if ((Get-TVFileHash $fragmentPath) -eq $manifest.terminalFragmentHash) {
                 Remove-Item -LiteralPath $fragmentPath
                 Write-Host 'Removed the unchanged Windows Terminal fragment.'
             } else {
@@ -224,7 +236,7 @@ if ($Uninstall) {
             $path = Join-Path $themeDir $file
             if (Test-Path -LiteralPath $path -PathType Leaf) {
                 $expected = $manifest.hashes.$file
-                if ($expected -and (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -eq $expected) {
+                if ($expected -and (Get-TVFileHash $path) -eq $expected) {
                     Remove-Item -LiteralPath $path
                 } else {
                     Write-Warning "Retained modified file: $path"
@@ -271,14 +283,14 @@ if ($Update) {
     foreach ($file in @('starship.toml', 'termuxvoid.ps1')) {
         $path = Join-Path $themeDir $file
         $expected = $oldManifest.hashes.$file
-        if (-not $expected -or -not (Test-Path -LiteralPath $path -PathType Leaf) -or (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $expected) {
+        if (-not $expected -or -not (Test-Path -LiteralPath $path -PathType Leaf) -or (Get-TVFileHash $path) -ne $expected) {
             throw "Installed file is missing or modified: $path. Back up your changes and resolve this before updating. No changes made."
         }
     }
     foreach ($file in @('animation.ps1', 'animation-demo.py', 'animation-setup.ps1', 'manager.ps1', 'termuxvoid-scheme.json')) {
         $path = Join-Path $themeDir $file
         $expected = $oldManifest.hashes.$file
-        if ($expected -and (-not (Test-Path -LiteralPath $path -PathType Leaf) -or (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $expected)) {
+        if ($expected -and (-not (Test-Path -LiteralPath $path -PathType Leaf) -or (Get-TVFileHash $path) -ne $expected)) {
             throw "Installed animation file is missing or modified: $path. No changes made."
         }
         if (-not $expected -and (Test-Path -LiteralPath $path)) { throw "Unowned animation file exists: $path. No changes made." }
@@ -338,13 +350,13 @@ if ($Update) {
         $manifest = @{
             profilePath = $profilePath
             hashes = @{
-                'starship.toml' = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash
-                'termuxvoid.ps1' = (Get-FileHash -LiteralPath $installedScript -Algorithm SHA256).Hash
-                'animation.ps1' = (Get-FileHash -LiteralPath (Join-Path $themeDir 'animation.ps1') -Algorithm SHA256).Hash
-                'animation-demo.py' = (Get-FileHash -LiteralPath (Join-Path $themeDir 'animation-demo.py') -Algorithm SHA256).Hash
-            'animation-setup.ps1' = (Get-FileHash -LiteralPath (Join-Path $themeDir 'animation-setup.ps1') -Algorithm SHA256).Hash
-                'manager.ps1' = (Get-FileHash -LiteralPath (Join-Path $themeDir 'manager.ps1') -Algorithm SHA256).Hash
-                'termuxvoid-scheme.json' = (Get-FileHash -LiteralPath (Join-Path $themeDir 'termuxvoid-scheme.json') -Algorithm SHA256).Hash
+                'starship.toml' = (Get-TVFileHash $configPath)
+                'termuxvoid.ps1' = (Get-TVFileHash $installedScript)
+                'animation.ps1' = (Get-TVFileHash (Join-Path $themeDir 'animation.ps1'))
+                'animation-demo.py' = (Get-TVFileHash (Join-Path $themeDir 'animation-demo.py'))
+            'animation-setup.ps1' = (Get-TVFileHash (Join-Path $themeDir 'animation-setup.ps1'))
+                'manager.ps1' = (Get-TVFileHash (Join-Path $themeDir 'manager.ps1'))
+                'termuxvoid-scheme.json' = (Get-TVFileHash (Join-Path $themeDir 'termuxvoid-scheme.json'))
             }
         }
         if ($oldManifest.terminalFragmentHash) { $manifest.terminalFragmentHash = $oldManifest.terminalFragmentHash }
@@ -382,13 +394,13 @@ try {
     $manifest = @{
         profilePath = $profilePath
         hashes = @{
-            'starship.toml' = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash
-            'termuxvoid.ps1' = (Get-FileHash -LiteralPath $installedScript -Algorithm SHA256).Hash
-            'animation.ps1' = (Get-FileHash -LiteralPath (Join-Path $themeDir 'animation.ps1') -Algorithm SHA256).Hash
-            'animation-demo.py' = (Get-FileHash -LiteralPath (Join-Path $themeDir 'animation-demo.py') -Algorithm SHA256).Hash
-            'animation-setup.ps1' = (Get-FileHash -LiteralPath (Join-Path $themeDir 'animation-setup.ps1') -Algorithm SHA256).Hash
-                'manager.ps1' = (Get-FileHash -LiteralPath (Join-Path $themeDir 'manager.ps1') -Algorithm SHA256).Hash
-                'termuxvoid-scheme.json' = (Get-FileHash -LiteralPath (Join-Path $themeDir 'termuxvoid-scheme.json') -Algorithm SHA256).Hash
+            'starship.toml' = (Get-TVFileHash $configPath)
+            'termuxvoid.ps1' = (Get-TVFileHash $installedScript)
+            'animation.ps1' = (Get-TVFileHash (Join-Path $themeDir 'animation.ps1'))
+            'animation-demo.py' = (Get-TVFileHash (Join-Path $themeDir 'animation-demo.py'))
+            'animation-setup.ps1' = (Get-TVFileHash (Join-Path $themeDir 'animation-setup.ps1'))
+                'manager.ps1' = (Get-TVFileHash (Join-Path $themeDir 'manager.ps1'))
+                'termuxvoid-scheme.json' = (Get-TVFileHash (Join-Path $themeDir 'termuxvoid-scheme.json'))
         }
     }
     [System.IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json), [System.Text.UTF8Encoding]::new($false))

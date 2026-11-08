@@ -7,6 +7,18 @@ param(
     [ValidateSet('All', 'TTE', 'AsciiRest', 'Asciimatics')][string]$Engine = 'All'
 )
 $ErrorActionPreference = 'Stop'
+function Get-TVFileHash([string]$Path) {
+    $algorithm = [System.Security.Cryptography.SHA256]::Create()
+    $stream = $null
+    try {
+        $stream = [System.IO.File]::OpenRead($Path)
+        return [BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-', '')
+    } finally {
+        if ($stream) { $stream.Dispose() }
+        $algorithm.Dispose()
+    }
+}
+
 $python = Join-Path $Base 'animation-python\Scripts\python.exe'
 if ($Engine -ne 'AsciiRest') {
     if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
@@ -78,7 +90,7 @@ if ($Engine -in @('All', 'AsciiRest')) {
                 $zip = Join-Path $temp 'node.zip'
                 Write-Host "Downloading Node.js 24.22.1 ($arch) into the user directory..."
                 Invoke-WebRequest -UseBasicParsing -Uri "https://nodejs.org/dist/v24.22.1/node-v24.22.1-win-$arch.zip" -OutFile $zip
-                if ((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash -ne $hash) { throw 'Node archive checksum mismatch.' }
+                if ((Get-TVFileHash $zip) -ne $hash) { throw 'Node archive checksum mismatch.' }
                 Expand-Archive -LiteralPath $zip -DestinationPath $temp
                 New-Item -ItemType Directory -Path $Base -Force | Out-Null
                 Move-Item -LiteralPath (Join-Path $temp "node-v24.22.1-win-$arch") -Destination $nodeDir
