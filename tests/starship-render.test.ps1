@@ -19,7 +19,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Starship failed to render failure prompt' }
         if (-not $success.Contains($env:USERNAME)) { throw "Username missing from prompt; expected $env:USERNAME; got: $($success -replace '[\x1b\r\n]', ' ')" }
         if (-not $success.Contains('termuxvoid-test')) { throw 'Git branch missing from prompt' }
-        if (-not $success.Contains('pkg 2.3.4')) { throw 'Package version missing from prompt' }
+        if ($success -notmatch 'pkg v?2\.3\.4') { throw "Package version missing from prompt: $($success -replace '[\x1b\r\n]', ' ')" }
         if (-not $success.Contains('Node ')) { throw 'Node project context missing from prompt' }
         if ($success -notmatch '\d{2}:\d{2}:\d{2}') { throw 'Time missing from prompt' }
         if (-not $success.Contains([char]0x2705)) { throw 'Success icon missing' }
