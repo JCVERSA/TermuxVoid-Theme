@@ -48,6 +48,16 @@ Alternatively, you can apply [`termuxvoid-scheme.json`](termuxvoid-scheme.json) 
 
 The original image banner and shell shortcuts are not enabled. This setup does not install Fish, eza or jp2a, or change the default shell.
 
+## Interactive manager
+
+After installing or updating, restart the same PowerShell profile and type **`psvoid`**. You can also press **Ctrl+Alt+V** at an empty prompt. The shortcut is not installed if PSReadLine already has a binding for it; Windows Terminal or an AltGr keyboard layout may also intercept it. In those cases use `psvoid` instead. An existing `psvoid` command is never replaced; use `Invoke-PowerShellVoidManager` if there is a name conflict.
+
+Choose with Up/Down and Enter, or type a number and press Enter; Esc or 0 goes back. The menu provides animation switches, idle delay and previews; prompt-component toggles and a custom directory text color; Terminal color presets and custom `#RRGGBB` colors; and status, dependency repair, update and uninstall. Repair, update and uninstall ask for confirmation. Maintenance actions operate on the current edition; switch editions to maintain the other one.
+
+Use **Switch target** to apply configuration changes to both installed PowerShell editions, or just the current one. The menu shows the current edition's values; applying to both sets the selected value in each. Other open shells must be restarted to pick up their changes. Terminal colors belong to a separate **PowerShell Void** Terminal profile; creating or changing colors creates or updates that profile, not `settings.json`. Restart Terminal and select that profile. Existing user overrides in Windows Terminal can take precedence.
+
+Prompt customization creates a separate user-owned prompt file and never edits the installed Starship template. The manager refuses to overwrite a modified generated prompt or an edited/unowned Terminal fragment; back up and resolve conflicts manually. Changes create backups under `~\.config\TermuxVoid-Windows\backups`. Prompt choices are retained on update; if the underlying template changed, open **Prompt components → Reapply** to pick up the updated template. Custom prompt files and settings are retained on uninstall.
+
 ## Animations
 
 The installer automatically sets up all three animation engines. In interactive Windows Terminal sessions the TTE welcome and ascii.rest banner play at startup; Asciimatics shows a full-screen starfield after **five seconds** of inactivity at an empty PowerShell prompt. It stops on keyboard or mouse activity, without intentionally consuming the key. It does not run while a command or interactive application is running, or while a command line contains text. It requires PSReadLine and Windows' session-wide last-input detection, so activity in other applications can delay or dismiss it. The display is not guaranteed to be limited to the active Windows Terminal tab. Very old PSReadLine versions or other event handlers may prevent idle detection. No packages are downloaded at shell startup.
@@ -78,7 +88,7 @@ From the same PowerShell edition and host used to install:
 & "$HOME\.config\TermuxVoid-Windows\$($PSVersionTable.PSEdition)\termuxvoid.ps1" -Uninstall
 ```
 
-Alternatively, run `./windows/termuxvoid.ps1 -Uninstall` from the repository. The uninstaller backs up the current profile and removes only the unchanged managed block, preserving other profile bytes. If the block was edited, it stops; remove the marked block manually and run uninstall again. Installed files changed since installation are retained. Backups, Starship, animation dependencies and preferences, fonts, and Windows Terminal settings remain; an unchanged optional Terminal fragment is removed. To restore an original profile instead, choose a backup and copy it to `$PROFILE.CurrentUserCurrentHost` after reviewing later changes.
+Alternatively, run `./windows/termuxvoid.ps1 -Uninstall` from the repository. The uninstaller backs up the current profile and removes only the unchanged managed block, preserving other profile bytes. If the block was edited, it stops; remove the marked block manually and run uninstall again. Installed files changed since installation are retained. Backups, custom prompt files and preferences, Starship, animation dependencies and preferences, fonts, and Windows Terminal settings remain; an unchanged optional Terminal fragment is removed. To restore an original profile instead, choose a backup and copy it to `$PROFILE.CurrentUserCurrentHost` after reviewing later changes.
 
 If installation fails partway through, inspect the profile and the printed backup path. Installation files may remain under `~\.config\TermuxVoid-Windows\<edition>`; review them before removing them. Don't delete backups until you no longer need them.
 

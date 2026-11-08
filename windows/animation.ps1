@@ -131,7 +131,7 @@ function global:Disable-TermuxVoidWelcome { Set-PowerShellVoidAnimation -Welcome
 # OnIdle is only useful when PSReadLine is waiting for an empty command line.
 # Use Windows' last-input tick as a conservative additional safeguard.
 function global:Invoke-PowerShellVoidIdle {
-    if (-not $global:PowerShellVoidSettings.Idle -or $global:PowerShellVoidIdleFailed -or
+    if ($global:PowerShellVoidMenuActive -or -not $global:PowerShellVoidSettings.Idle -or $global:PowerShellVoidIdleFailed -or
         -not (Get-Module PSReadLine) -or $env:TERMUXVOID_NO_ANIMATION -or $env:NO_COLOR) { return }
     try {
         $line = $null; $cursor = 0
@@ -183,6 +183,12 @@ namespace PowerShellVoid {
 }
 
 $global:PowerShellVoidSettings = Get-PowerShellVoidAnimationSettings
+& {
+    $manager = Join-Path $HOME ('.config\TermuxVoid-Windows\' + $PSVersionTable.PSEdition + '\manager.ps1')
+    if (Test-Path -LiteralPath $manager -PathType Leaf) {
+        try { . $manager } catch { Write-Warning "PowerShell Void manager unavailable: $($_.Exception.Message)" }
+    }
+}
 if ($env:WT_SESSION -and -not [Console]::IsOutputRedirected -and -not [Console]::IsInputRedirected -and
     $env:TERM -ne 'dumb' -and -not $env:NO_COLOR -and -not $env:TERMUXVOID_NO_ANIMATION) {
     if ($global:PowerShellVoidSettings.Welcome) { Show-TermuxVoidAnimation -Engine TTE }

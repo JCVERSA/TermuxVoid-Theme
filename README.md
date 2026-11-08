@@ -26,7 +26,7 @@ In Windows Terminal, open PowerShell and run:
 & ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/JCVERSA/TermuxVoid-Theme/arena/d693b190-termuxvoid-theme/windows/install.ps1')))
 ```
 
-This installs PowerShell Void and its animation dependencies from the current development branch. See the [Windows setup and uninstall guide](windows/README.md) for details and a local-install alternative. The Termux installer below is not intended for Windows.
+This installs PowerShell Void and its animation dependencies from the current development branch. After restarting, run `psvoid` to open its interactive manager. See the [Windows setup and uninstall guide](windows/README.md) for details and a local-install alternative. The Termux installer below is not intended for Windows.
 
 ## 🛠️ Installation
 

@@ -15,7 +15,7 @@ function Invoke-RestMethod([string]$Uri) {
 function Invoke-WebRequest([string]$Uri, [string]$OutFile, [switch]$UseBasicParsing) {
     $name = $Uri.Substring($Uri.LastIndexOf('/') + 1)
     if ($script:failDownload -and $name -eq 'starship.toml') { throw 'Simulated download failure' }
-    if ($name -notin @('termuxvoid.ps1', 'starship.toml', 'termuxvoid-scheme.json', 'animation.ps1', 'animation-demo.py', 'animation-setup.ps1')) { throw "Unexpected download: $Uri" }
+    if ($name -notin @('termuxvoid.ps1', 'starship.toml', 'termuxvoid-scheme.json', 'animation.ps1', 'animation-demo.py', 'animation-setup.ps1', 'manager.ps1')) { throw "Unexpected download: $Uri" }
     Copy-Item -LiteralPath (Join-Path $root "windows\$name") -Destination $OutFile
 }
 try {

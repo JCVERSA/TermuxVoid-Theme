@@ -60,7 +60,7 @@ try {
     $animationOffset = $profileText.IndexOf(("`r`n" + '# >>> TermuxVoid Animations >>>'))
     Assert ($animationOffset -ge 0) 'animation block present on fresh install'
     [System.IO.File]::WriteAllText($profilePath, $profileText.Substring(0, $animationOffset), [System.Text.UTF8Encoding]::new($false))
-    foreach ($file in @('animation.ps1', 'animation-demo.py', 'animation-setup.ps1')) {
+    foreach ($file in @('animation.ps1', 'animation-demo.py', 'animation-setup.ps1', 'manager.ps1', 'termuxvoid-scheme.json')) {
         Remove-Item -LiteralPath (Join-Path $themeDir $file)
         $manifest.hashes.PSObject.Properties.Remove($file)
     }

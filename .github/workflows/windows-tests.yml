@@ -42,6 +42,20 @@ jobs:
             Write-Output "::error::$($_.Exception.Message) at $($_.ScriptStackTrace)"
             exit 1
           }
+      - name: Test manager on Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          try { ./tests/windows-manager.test.ps1 } catch {
+            Write-Output "::error::$($_.Exception.Message) at $($_.ScriptStackTrace)"
+            exit 1
+          }
+      - name: Test manager on PowerShell 7
+        shell: pwsh
+        run: |
+          try { ./tests/windows-manager.test.ps1 } catch {
+            Write-Output "::error::$($_.Exception.Message) at $($_.ScriptStackTrace)"
+            exit 1
+          }
       - name: Test animation helpers on Windows PowerShell 5.1
         shell: powershell
         run: |
@@ -89,6 +103,7 @@ jobs:
             $dir = Join-Path $env:RUNNER_TEMP 'starship-test'
             Expand-Archive $zip -DestinationPath $dir
             ./tests/starship-render.test.ps1 -Starship (Join-Path $dir 'starship.exe')
+            ./tests/windows-manager.test.ps1 -Starship (Join-Path $dir 'starship.exe')
           } catch {
             Write-Output "::error::$($_.Exception.Message) at $($_.ScriptStackTrace)"
             exit 1
