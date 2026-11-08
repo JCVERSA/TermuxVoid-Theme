@@ -12,7 +12,7 @@ function BytesEqual([byte[]]$A, [byte[]]$B) {
 }
 try {
     New-Item -ItemType Directory -Path $testRoot | Out-Null
-    $HOME = $testRoot
+    Set-Variable -Name HOME -Value $testRoot -Scope Local -Force
     $profilePath = Join-Path $testRoot 'Profile With Spaces\Microsoft.PowerShell_profile.ps1'
     $PROFILE = [pscustomobject]@{ CurrentUserCurrentHost = $profilePath }
     New-Item -ItemType Directory -Path (Split-Path -Parent $profilePath) -Force | Out-Null
@@ -118,7 +118,7 @@ try {
     }
     Write-Host 'PASS: Windows installer integration tests'
 } finally {
-    $HOME = $originalHome
+    Set-Variable -Name HOME -Value $originalHome -Scope Local -Force
     $PROFILE = $originalProfile
     if (Test-Path -LiteralPath $testRoot) { Remove-Item -LiteralPath $testRoot -Recurse -Force }
 }
